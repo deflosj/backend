@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  MEMBER
+  CAPTAIN
+  ADMIN
+}
+
+enum SponsorTier {
+  MAIN
+  GOLD
+  STANDARD
+}
+
+enum Phase {
+  GROUP
+  R16
+  R8
+  QUARTER
+  SEMI
+  CONSOLATION_FINAL
+  FINAL
+  TIEBREAK
+}
+
+enum MsgStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+model User {
+  id                Int              @id @default(autoincrement())
+  email             String           @unique
+  username          String           @unique
+  password          String
+  role              UserRole         @default(MEMBER)
+  avatarUrl         String?
+  isActive          Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  refreshTokens     RefreshToken[]
+  authoredNewsPosts NewsPost[]       @relation("NewsPostAuthor")
+  createdEvents     Event[]          @relation("EventCreatedBy")
+  memberProfile     MemberProfile?
+  captainedTeams    Team[]           @relation("TeamCaptain")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model NewsPost {
+  id           Int      @id @default(autoincrement())
+  authorId     Int
+  title        String
+  slug         String   @unique
+  body         String
+  coverUrl     String?
+  publishedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  author       User     @relation("NewsPostAuthor", fields: [authorId], references: [id])
+
+  @@index([authorId])
+}
+
+model Event {
+  id           Int      @id @default(autoincrement())
+  createdById  Int
+  title        String
+  description  String?
+  location     String?
+  startsAt     DateTime
+  endsAt       DateTime?
+  isPublished  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  createdBy    User     @relation("EventCreatedBy", fields: [createdById], references: [id])
+
+  @@index([createdById])
+}
+
+model Sponsor {
+  id         Int         @id @default(autoincrement())
+  name       String
+  logoUrl    String?
+  websiteUrl String?
+  tier       SponsorTier @default(STANDARD)
+  isActive   Boolean     @default(true)
+  sortOrder  Int         @default(0)
+}
+
+model MemberProfile {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  firstName String
+  lastName  String
+  phone     String?
+  bio       String?
+  joinedAt  DateTime?
+  isPublic  Boolean  @default(true)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Tournament {
+  id              Int              @id @default(autoincrement())
+  name            String
+  year            Int
+  isActive        Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  rules           TournamentRules?
+  poules          Poule[]
+  teams           Team[]
+  matches         Match[]
+  tiebreakers     Tiebreaker[]
+}
+
+model TournamentRules {
+  id            Int        @id @default(autoincrement())
+  tournamentId   Int       @unique
+  description   String
+  updatedAt     DateTime   @updatedAt
+  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+}
+
+model Poule {
+  id           Int       @id @default(autoincrement())
+  tournamentId Int
+  name         String
+  description  String?
+  phase        Phase     @default(GROUP)
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  teams        Team[]
+  matches      Match[]
+
+  @@index([tournamentId])
+}
+
+model Team {
+  id            Int          @id @default(autoincrement())
+  tournamentId  Int
+  captainId     Int?
+  pouleId       Int?
+  name          String
+  logoUrl       String?
+  isPresent     Boolean      @default(false)
+  speler1       String
+  speler2       String
+  speler3       String
+  speler4       String
+  captainName   String
+  played        Int          @default(0)
+  won           Int          @default(0)
+  drawn         Int          @default(0)
+  lost          Int          @default(0)
+  goalsFor      Int          @default(0)
+  goalsAgainst  Int          @default(0)
+  saldo         Int          @default(0)
+  points        Int          @default(0)
+  tournament    Tournament   @relation(fields: [tournamentId], references: [id])
+  captain       User?        @relation("TeamCaptain", fields: [captainId], references: [id])
+  poule         Poule?       @relation(fields: [pouleId], references: [id])
+  matchesAsTeamA Match[]     @relation("MatchTeamA")
+  matchesAsTeamB Match[]     @relation("MatchTeamB")
+  wonMatches    Match[]      @relation("MatchWinner")
+  tiebreakWins  Tiebreaker[] @relation("TiebreakerWinner")
+  tiebreakEntries TiebreakTeam[] @relation("TiebreakTeamTeam")
+
+  @@index([tournamentId])
+  @@index([captainId])
+  @@index([pouleId])
+}
+
+model Match {
+  id           Int       @id @default(autoincrement())
+  tournamentId Int
+  pouleId      Int?
+  teamAId      Int?
+  teamBId      Int?
+  winnerId     Int?
+  time         DateTime  @default(now())
+  track        Int?
+  phase        Phase     @default(GROUP)
+  bracketPos   String?   @unique
+  scoreA       Int?
+  scoreB       Int?
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  poule        Poule?    @relation(fields: [pouleId], references: [id])
+  teamA        Team?     @relation("MatchTeamA", fields: [teamAId], references: [id])
+  teamB        Team?     @relation("MatchTeamB", fields: [teamBId], references: [id])
+  winner       Team?     @relation("MatchWinner", fields: [winnerId], references: [id])
+
+  @@index([tournamentId])
+  @@index([pouleId])
+  @@index([teamAId])
+  @@index([teamBId])
+  @@index([winnerId])
+}
+
+model Tiebreaker {
+  id           Int            @id @default(autoincrement())
+  tournamentId Int           @unique
+  winnerId     Int?
+  tournament   Tournament    @relation(fields: [tournamentId], references: [id])
+  winner       Team?         @relation("TiebreakerWinner", fields: [winnerId], references: [id])
+  teams        TiebreakTeam[]
+
+  @@index([winnerId])
+}
+
+model TiebreakTeam {
+  id          Int        @id @default(autoincrement())
+  tiebreakId  Int
+  teamId      Int
+  score       Int?
+  tiebreaker  Tiebreaker @relation(fields: [tiebreakId], references: [id])
+  team        Team       @relation("TiebreakTeamTeam", fields: [teamId], references: [id])
+
+  @@unique([tiebreakId, teamId])
+  @@index([tiebreakId])
+  @@index([teamId])
+}
+
+model ContactMessage {
+  id        Int        @id @default(autoincrement())
+  name      String
+  email     String
+  subject   String?
+  body      String
+  status    MsgStatus  @default(UNREAD)
+  createdAt DateTime   @default(now())
+  readAt    DateTime?
+}
