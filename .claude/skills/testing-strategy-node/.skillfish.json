@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "testing-strategy-node",
+  "owner": "tymoj",
+  "repo": "marketplace",
+  "path": "plugins/conductor/skills/testing-strategy-node",
+  "branch": "main",
+  "sha": "807f296ede979916b46270d818ceb44fc0183dce",
+  "source": "manual"
+}

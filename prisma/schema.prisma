@@ -118,16 +118,20 @@ model MemberProfile {
 }
 
 model Tournament {
-  id              Int              @id @default(autoincrement())
-  name            String
-  year            Int
-  isActive        Boolean          @default(false)
-  createdAt       DateTime         @default(now())
-  rules           TournamentRules?
-  poules          Poule[]
-  teams           Team[]
-  matches         Match[]
-  tiebreakers     Tiebreaker[]
+  id                     Int              @id @default(autoincrement())
+  name                   String
+  year                   Int
+  isActive               Boolean          @default(false)
+  teamsPerPoule          Int?
+  teamsAdvancingPerPoule Int?
+  bestNthsAdvancing      Int?
+  status                 String           @default("UPCOMING")
+  createdAt              DateTime         @default(now())
+  rules                  TournamentRules?
+  poules                 Poule[]
+  teams                  Team[]
+  matches                Match[]
+  tiebreakers            Tiebreaker[]
 }
 
 model TournamentRules {

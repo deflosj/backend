@@ -7,10 +7,13 @@ import {
   addPoule,
   addTeam,
   addTournament,
+  applyDelay,
   editMatch,
   editPoule,
   editTeam,
   editTournament,
+  generateGroupMatches,
+  generateKnockout,
   getActiveTournament,
   getMatch,
   getPoule,
@@ -65,7 +68,13 @@ tournamentRouter.get("/:id", async (req: Request, res: Response, next: NextFunct
 
 tournamentRouter.post("/", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.status(201).json(await addTournament({ name: req.body.name, year: req.body.year }));
+    res.status(201).json(await addTournament({
+      name: req.body.name,
+      year: req.body.year,
+      teamsPerPoule: req.body.teamsPerPoule ?? null,
+      teamsAdvancingPerPoule: req.body.teamsAdvancingPerPoule ?? null,
+      bestNthsAdvancing: req.body.bestNthsAdvancing ?? null,
+    }));
   } catch (e) {
     next(e);
   }
@@ -73,7 +82,14 @@ tournamentRouter.post("/", ...adminOnly, async (req: Request, res: Response, nex
 
 tournamentRouter.put("/:id", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json(await editTournament(Number(req.params.id), { name: req.body.name, year: req.body.year }));
+    res.json(await editTournament(Number(req.params.id), {
+      name: req.body.name,
+      year: req.body.year,
+      teamsPerPoule: req.body.teamsPerPoule,
+      teamsAdvancingPerPoule: req.body.teamsAdvancingPerPoule,
+      bestNthsAdvancing: req.body.bestNthsAdvancing,
+      status: req.body.status,
+    }));
   } catch (e) {
     next(e);
   }
@@ -341,6 +357,45 @@ tournamentRouter.post("/:id/tiebreaker/winner", ...adminOnly, async (req: Reques
 tournamentRouter.post("/:id/tiebreaker/score", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await recordTiebreakerScore(Number(req.params.id), Number(req.body.teamId), Number(req.body.score)));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ── Match generation ──────────────────────────────────────────────────────────
+
+tournamentRouter.post("/:id/generate-matches", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { startTime, slotMinutes, firstTrack } = req.body;
+    if (!startTime) { res.status(400).json({ message: "startTime is required" }); return; }
+    if (!slotMinutes) { res.status(400).json({ message: "slotMinutes is required" }); return; }
+    res.status(201).json(await generateGroupMatches(Number(req.params.id), {
+      startTime: new Date(startTime),
+      slotMinutes: Number(slotMinutes),
+      firstTrack: firstTrack ? Number(firstTrack) : undefined,
+    }));
+  } catch (e) {
+    next(e);
+  }
+});
+
+tournamentRouter.post("/:id/generate-knockout", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { startTime, slotMinutes } = req.body;
+    if (!startTime) { res.status(400).json({ message: "startTime is required" }); return; }
+    if (!slotMinutes) { res.status(400).json({ message: "slotMinutes is required" }); return; }
+    res.status(201).json(await generateKnockout(Number(req.params.id), {
+      startTime: new Date(startTime),
+      slotMinutes: Number(slotMinutes),
+    }));
+  } catch (e) {
+    next(e);
+  }
+});
+
+tournamentRouter.post("/:id/apply-delay", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await applyDelay(Number(req.params.id), Number(req.body.minutes)));
   } catch (e) {
     next(e);
   }
