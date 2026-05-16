@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { PrismaClient, UserRole, SponsorTier, MsgStatus, Phase } from "@prisma/client";
+import { PrismaClient, UserRole, SponsorTier, MsgStatus, Phase, RaceCategory, RegistrationStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -12,11 +12,11 @@ async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash("Password123!", 10);
 
   const wannes = await prisma.user.upsert({
-    where: { email: "wannes.persyn@deflosj.be" },
+    where: { email: "wannes.persyn@gmail.com" },
     update: {},
     create: {
-      email: "wannes.persyn@deflosj.be",
-      username: "wannes.persyn",
+      email: "wannes.persyn@gmail.com",
+      username: "wannes_persyn",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -24,11 +24,11 @@ async function main(): Promise<void> {
   });
 
   const arne = await prisma.user.upsert({
-    where: { email: "arne.vandepoel@deflosj.be" },
+    where: { email: "arne.vandepoel@gmail.com" },
     update: {},
     create: {
-      email: "arne.vandepoel@deflosj.be",
-      username: "arne.vandepoel",
+      email: "arne.vandepoel@gmail.com",
+      username: "arne_vandepoel",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -36,11 +36,11 @@ async function main(): Promise<void> {
   });
 
   const gert = await prisma.user.upsert({
-    where: { email: "gert.verbiern@deflosj.be" },
+    where: { email: "gert.verbiern@gmail.com" },
     update: {},
     create: {
-      email: "gert.verbiern@deflosj.be",
-      username: "gert.verbiern",
+      email: "gert.verbiern@gmail.com",
+      username: "gert_verbiern",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -48,11 +48,11 @@ async function main(): Promise<void> {
   });
 
   const jannes = await prisma.user.upsert({
-    where: { email: "jannes.devesse@deflosj.be" },
+    where: { email: "jannes.devesse@gmail.com" },
     update: {},
     create: {
-      email: "jannes.devesse@deflosj.be",
-      username: "jannes.devesse",
+      email: "jannes.devesse@gmail.com",
+      username: "jannes_devesse",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -60,11 +60,11 @@ async function main(): Promise<void> {
   });
 
   const joppe = await prisma.user.upsert({
-    where: { email: "joppe.vanloye@deflosj.be" },
+    where: { email: "joppe.vanloye@gmail.com" },
     update: {},
     create: {
-      email: "joppe.vanloye@deflosj.be",
-      username: "joppe.vanloye",
+      email: "joppe.vanloye@gmail.com",
+      username: "joppe_vanloye",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -72,11 +72,11 @@ async function main(): Promise<void> {
   });
 
   const liselot = await prisma.user.upsert({
-    where: { email: "liselot.persyn@deflosj.be" },
+    where: { email: "liselot.persyn@gmail.com" },
     update: {},
     create: {
-      email: "liselot.persyn@deflosj.be",
-      username: "liselot.persyn",
+      email: "liselot.persyn@gmail.com",
+      username: "liselot_persyn",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -84,11 +84,11 @@ async function main(): Promise<void> {
   });
 
   const michiel = await prisma.user.upsert({
-    where: { email: "michiel.janssens@deflosj.be" },
+    where: { email: "michiel.janssens@gmail.com" },
     update: {},
     create: {
-      email: "michiel.janssens@deflosj.be",
-      username: "michiel.janssens",
+      email: "michiel.janssens@gmail.com",
+      username: "michiel_janssens",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -96,11 +96,11 @@ async function main(): Promise<void> {
   });
 
   const pieter = await prisma.user.upsert({
-    where: { email: "pieter.david@deflosj.be" },
+    where: { email: "pieter.david@gmail.com" },
     update: {},
     create: {
-      email: "pieter.david@deflosj.be",
-      username: "pieter.david",
+      email: "pieter.david@gmail.com",
+      username: "pieter_david",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -108,11 +108,11 @@ async function main(): Promise<void> {
   });
 
   const roel = await prisma.user.upsert({
-    where: { email: "roel.debecker@deflosj.be" },
+    where: { email: "roel.debecker@gmail.com" },
     update: {},
     create: {
-      email: "roel.debecker@deflosj.be",
-      username: "roel.debecker",
+      email: "roel.debecker@gmail.com",
+      username: "roel_debecker",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
@@ -466,6 +466,84 @@ Wijzigingen ten opzichte van vorig jaar:
 
   console.log("  ✔  Contact messages");
 
+  // ── Cycling race registrations ─────────────────────────────────────────────
+
+  const registrationsData: Array<{
+    firstName: string; lastName: string; dateOfBirth: string | null;
+    gender: string; address: string; nationalRegisterNumber: string;
+    email: string; phone: string; wielerclub: string | null;
+    raceCategory: RaceCategory; status: RegistrationStatus;
+    timestamp: Date;
+  }> = [
+    // ── Dorpelingenkoers ──────────────────────────────────────────────────────
+    { firstName: "Wout",      lastName: "Verbieren",      dateOfBirth: "2003-04-18", gender: "M", address: "Kapelstraat 36  3110 Rotselaar",          nationalRegisterNumber: "03.04.18-201.58",  email: "gert.verbieren@telenet.be",       phone: "0468/287020",      wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-03T10:12:00") },
+    { firstName: "Steven",    lastName: "Smout",           dateOfBirth: "1976-07-12", gender: "M", address: "Uitweg",                                  nationalRegisterNumber: "76-12-07-423.77",  email: "steven.smout4321@gmail.com",      phone: "0479532656",       wielerclub: "Wtc Doordrijvers",         raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-05T09:45:00") },
+    { firstName: "Nicolas",   lastName: "Kayaerts",        dateOfBirth: "2002-09-16", gender: "M", address: "Berkenlaan 12 3110 Rotselaar",             nationalRegisterNumber: "02.09.16-239.94",  email: "nicolas.kayaerts1@gmail.com",     phone: "0468200022",       wielerclub: "De Doordrijvers",          raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-06T11:20:00") },
+    { firstName: "Wouter",    lastName: "Remeysen",        dateOfBirth: "1979-02-08", gender: "M", address: "Kerkhofstraat 2A 3110 Rotselaar",          nationalRegisterNumber: "790208 415 48",    email: "wouter_remeysen@yahoo.com",       phone: "0473554837",       wielerclub: "WTC De Biekes",            raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-07T14:00:00") },
+    { firstName: "Steven",    lastName: "Van De Weyer",    dateOfBirth: "1988-12-05", gender: "M", address: "Hoogland 119 Werchter",                    nationalRegisterNumber: "88.12.05-083.50",  email: "steven_1245@hotmail.coo",         phone: "0477305949",       wielerclub: "Amigo's Cycling Team",     raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-08T08:30:00") },
+    { firstName: "Piet",      lastName: "Wuyts",           dateOfBirth: "2004-05-10", gender: "M", address: "Walstraat 7",                              nationalRegisterNumber: "04.06.10 -143 03", email: "pietwuyts1@gmail.com",            phone: "0494327893",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-09T16:05:00") },
+    { firstName: "Tim",       lastName: "Bogaert",         dateOfBirth: "1996-01-06", gender: "M", address: "Gildenstraat 76 3111 Wezemaal",            nationalRegisterNumber: "96010632365",      email: "bogaert-tim@hotmail.com",         phone: "0491599037",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-10T10:00:00") },
+    { firstName: "Roel",      lastName: "Wouters",         dateOfBirth: "1985-07-03", gender: "M", address: "Heirbaan 17c 3110 rotselaar",              nationalRegisterNumber: "85.07.03-103.89",  email: "woutersroel@hotmail.com",         phone: "0495/734360",      wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-10T10:15:00") },
+    { firstName: "Steven",    lastName: "Sophie",          dateOfBirth: "1975-01-27", gender: "M", address: "Aarschotsesteenweg 268",                   nationalRegisterNumber: "75012710981",      email: "stevensophie@hotmail.com",        phone: "0499604916",       wielerclub: "WTC Doordrijvers",         raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-11T09:20:00") },
+    { firstName: "Kurt",      lastName: "Develder",        dateOfBirth: "1972-01-01", gender: "M", address: "Vlasselaar 27. 3221 Nieuwrode",            nationalRegisterNumber: "72.01.01-095.36",  email: "kurt.develder@hotmail.com",       phone: "0497906574",       wielerclub: "Rct Rotselaar",            raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-11T11:45:00") },
+    { firstName: "Lucas",     lastName: "Nelissen",        dateOfBirth: "1999-01-27", gender: "M", address: "Achterheidestraat 1b, Rotselaar",          nationalRegisterNumber: "99.01.27-287.19",  email: "lucasnelissen.ln@gmail.com",      phone: "0472084095",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-12T13:00:00") },
+    { firstName: "Jelle",     lastName: "De Leeuw",        dateOfBirth: "1980-11-06", gender: "M", address: "Sint-Hadrianusstraat, 18 - 0001 Wijgmaal", nationalRegisterNumber: "80.11.06-181.38",  email: "jelle_de_leeuw@hotmail.com",      phone: "0489571773",       wielerclub: "De Biekes Wakkerzeel",     raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-13T09:10:00") },
+    { firstName: "Roald",     lastName: "De Meyer",        dateOfBirth: "1989-04-12", gender: "M", address: "Beverlaak 16/18, 3118 Werchter",           nationalRegisterNumber: "89.04.12-279.94",  email: "roald_demeyer@hotmail.com",       phone: "0472693854",       wielerclub: "TEBEO",                    raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-14T15:30:00") },
+    { firstName: "Stijn",     lastName: "Castel",          dateOfBirth: "1994-09-19", gender: "M", address: "Sint-Antoniuswijk, 72, Rotselaar",         nationalRegisterNumber: "94.09.19-279.24",  email: "stijncastel@protonmail.com",      phone: "0483427553",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-15T08:00:00") },
+    { firstName: "Filip",     lastName: "Torfs",           dateOfBirth: "1969-10-28", gender: "M", address: "Ridderslaan 30a",                          nationalRegisterNumber: "69102819992",      email: "f.torfs@telenet.be",             phone: "0499945262",       wielerclub: "De doordrijvers Wezemaal", raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-16T10:20:00") },
+    { firstName: "Stefaan",   lastName: "Persyn",          dateOfBirth: "1968-02-16", gender: "M", address: "Hellichtstraat 41 Rotselaar",               nationalRegisterNumber: "68021630179",      email: "persyn.stefaan@gmail.com",        phone: "0475 757752",      wielerclub: "De Doordrijvers",          raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-17T12:00:00") },
+    { firstName: "Lara",      lastName: "Vuerinckx",       dateOfBirth: "1991-09-30", gender: "V", address: "Gebr. Van Tiltstraat 16 0101",              nationalRegisterNumber: "30091991-40092",   email: "l_vuerinckx@hotmail.com",         phone: "0456703663",       wielerclub: "Amigo's Cycling Team",     raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-18T09:00:00") },
+    { firstName: "Noa",       lastName: "Tuyls",           dateOfBirth: "2004-04-26", gender: "M", address: "Leuvensebaan 44b rotselaar",                nationalRegisterNumber: "04042630526",      email: "noa.tuyls@telenet.be",            phone: "0468265126",       wielerclub: "Kaa Petaate",              raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-19T11:30:00") },
+    { firstName: "Wannes",    lastName: "Persyn",          dateOfBirth: "2003-06-24", gender: "M", address: "Hellichtstraat 41",                         nationalRegisterNumber: "03.06.24-053.40",  email: "wannes.persyn@gmail.com",         phone: "0478088082",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-20T14:45:00") },
+    { firstName: "Christof",  lastName: "De Groote",       dateOfBirth: "1982-06-02", gender: "M", address: "Rochusstraat 45",                           nationalRegisterNumber: "82060239746",      email: "christof_dg@hotmail.com",         phone: "0496836220",       wielerclub: "Tebeo Werchter",           raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-21T09:15:00") },
+    { firstName: "Steven",    lastName: "Wijns",           dateOfBirth: "1971-09-19", gender: "M", address: "Rochusstraat 45 Werchter",                  nationalRegisterNumber: "71.09.19-105.06",  email: "steven.wijns1@telenet.be",        phone: "077629049",        wielerclub: "TBO Werchter",             raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-22T10:00:00") },
+    { firstName: "Robin",     lastName: "Pottiez",         dateOfBirth: "1994-04-20", gender: "M", address: "Steenweg op nieuwrode 36 0201",             nationalRegisterNumber: "94042039141",      email: "robinpottiez@gmail.com",          phone: "0474625603",       wielerclub: "Asfalvreters",             raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-23T11:00:00") },
+    { firstName: "Eddy",      lastName: "Valkenaers",      dateOfBirth: "1968-07-04", gender: "M", address: "Veldstraat 12",                             nationalRegisterNumber: "68070431167",      email: "eddy.valkenaers@telenet.be",      phone: "0473864656",       wielerclub: "RCT Rotselaar",            raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-24T08:30:00") },
+    { firstName: "Sverre",    lastName: "Van Espen",       dateOfBirth: "2002-09-18", gender: "M", address: "Hanewijk",                                  nationalRegisterNumber: "02.09.18-143.33",  email: "sverrevanespen3@gmail.com",       phone: "0470 45 50 08",    wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-25T13:20:00") },
+    { firstName: "Koen",      lastName: "De Craene",       dateOfBirth: "1980-06-13", gender: "M", address: "Kapelstraat 62",                            nationalRegisterNumber: "80-06.13-059.12",  email: "koen.decraene@me.com",            phone: "0478969353",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-26T15:00:00") },
+    { firstName: "Ruben",     lastName: "Kestens",         dateOfBirth: "2001-12-11", gender: "M", address: "aarschotsesteenweg 657",                    nationalRegisterNumber: "01121135729",      email: "ruben.kestens@gmail.com",         phone: "0472500142",       wielerclub: "Cousins Cycling Team",     raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-27T09:00:00") },
+    { firstName: "Rigo",      lastName: "Olemans",         dateOfBirth: "1964-08-31", gender: "M", address: "Catharinalaan 10, Rotselaar",               nationalRegisterNumber: "640831-29974",     email: "rigo.olemans@gmail.com",          phone: "0475584513",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-28T10:40:00") },
+    { firstName: "Kristiaan", lastName: "Van Meerbeek",    dateOfBirth: "1968-10-13", gender: "M", address: "Groenstraat 34",                            nationalRegisterNumber: "68.10.13-243.89",  email: "kvm@leonidas.be",                 phone: "0476741033",       wielerclub: null,                       raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-29T11:00:00") },
+    { firstName: "Gert",      lastName: "Verbieren",       dateOfBirth: "1974-06-21", gender: "M", address: "Kapelstraat 36 3110 Rotselaar",             nationalRegisterNumber: "74.06.21-295.89",  email: "gert.verbieren@telenet.be",       phone: "0476 762410",      wielerclub: "De flosj",                 raceCategory: RaceCategory.DORPELINGENKOERS, status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-30T08:00:00") },
+    // ── Fun wedstrijd ─────────────────────────────────────────────────────────
+    { firstName: "Tim",       lastName: "Colignon",        dateOfBirth: "2001-03-25", gender: "M", address: "Tervuursesteenweg 32a Perk",                nationalRegisterNumber: "010325-075-22",    email: "tim.colignon@gmail.com",          phone: "485349088",        wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-03T12:00:00") },
+    { firstName: "Roel",      lastName: "Wouters",         dateOfBirth: "1985-07-03", gender: "M", address: "Heirbaan 17c 3110 rotselaar",              nationalRegisterNumber: "85.07.03-103.89",  email: "woutersroel@hotmail.com",         phone: "0495/734360",      wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-10T10:16:00") },
+    { firstName: "Mauro",     lastName: "Van Ouytsel",     dateOfBirth: "2001-01-19", gender: "M", address: "Beverlaak 1 bus 0002, 3118 Werchter",      nationalRegisterNumber: "01.01.19-267.93",  email: "maurovanouytsel@hotmail.com",     phone: "0486536314",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-11T10:30:00") },
+    { firstName: "Frank",     lastName: "Ysebaert",        dateOfBirth: "1982-01-22", gender: "M", address: "Knipsterweg 6 1560 Hoeilaart",              nationalRegisterNumber: "82012234149",      email: "ysebaert.frank@protonmail.ch",    phone: "0479483663",       wielerclub: "Control Cyclofitt",        raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-12T14:00:00") },
+    { firstName: "Thomas",    lastName: "Milissen",        dateOfBirth: "2000-10-26", gender: "M", address: "Wijgmaalsesteenweg 123A, Haacht",           nationalRegisterNumber: "00102628997",      email: "thomas.milissen@icloud.com",      phone: "0473748644",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-13T09:45:00") },
+    { firstName: "Lennert",   lastName: "Herman",          dateOfBirth: "1992-01-02", gender: "M", address: "Korbeek-losestraat 25 3001 Heverlee",       nationalRegisterNumber: "92.01.02-327.97",  email: "lennert.herman@hotmail.com",      phone: "0475500116",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-14T11:00:00") },
+    { firstName: "Floris",    lastName: "Eggers",          dateOfBirth: "1999-04-10", gender: "M", address: "Martelarenlaan 22, Kessel-Lo",              nationalRegisterNumber: "99041025104",      email: "floris.eggers123@gmail.com",      phone: "0493186515",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-15T10:00:00") },
+    { firstName: "Lucas",     lastName: "Soetemans",       dateOfBirth: "2001-06-23", gender: "M", address: "Kloosterstraat 19 Haacht",                  nationalRegisterNumber: "01062307704",      email: "lucsoetemans@gmail.com",          phone: "0468126708",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-16T13:30:00") },
+    { firstName: "Loek",      lastName: "Torfs",           dateOfBirth: "2005-06-13", gender: "M", address: "Ridderstraat 30A, Rotselaar 3110",          nationalRegisterNumber: "05.06.13-239.32",  email: "loek.torfs@live.be",              phone: "0474563156",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-17T08:45:00") },
+    { firstName: "Lukas",     lastName: "Vandenhaute",     dateOfBirth: "2000-03-20", gender: "M", address: "Sint-Jansbergsesteenweg 234",               nationalRegisterNumber: "00032000725",      email: "lukasvandenhaute@gmail.com",      phone: "0496371824",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-18T12:15:00") },
+    { firstName: "Gilles",    lastName: "Puttevils",       dateOfBirth: "1995-12-29", gender: "M", address: "Rozenbergstraat 3",                         nationalRegisterNumber: "95122938350",      email: "gillesputtevils95@gmail.com",     phone: "0470604413",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-19T09:30:00") },
+    { firstName: "Brent",     lastName: "Heynsmans",       dateOfBirth: "1994-08-08", gender: "M", address: "Wolfshaegen 123A, 3040 Neerijse",           nationalRegisterNumber: "94080813704",      email: "brent.heynsmans@outlook.com",     phone: "0477175745",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-20T11:00:00") },
+    { firstName: "Laurens",   lastName: "De Ridder",       dateOfBirth: "1995-07-13", gender: "M", address: "Umafolaan 7 bus 101, Herent 3020",          nationalRegisterNumber: "95071341971",      email: "laurens.derid@gmail.com",         phone: "0470622615",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-21T14:00:00") },
+    { firstName: "Wouter",    lastName: "De Donder",       dateOfBirth: "1995-05-05", gender: "M", address: "Smidstraat 61a, 2590 Berlaar",              nationalRegisterNumber: "95.05.05-257.71",  email: "dedonderwouter@gmail.com",        phone: "0492173949",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-22T09:00:00") },
+    { firstName: "Jan",       lastName: "Vandendriessche", dateOfBirth: "1997-04-29", gender: "M", address: "Leopold De Vriesstraat 16",                 nationalRegisterNumber: "97.04.29-321.01",  email: "jann.vandendriessche@hotmail.com",phone: "049266868",        wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-23T10:30:00") },
+    { firstName: "Brent",     lastName: "Eggerickx",       dateOfBirth: "1994-09-15", gender: "M", address: "Kapelbergstraat 3",                         nationalRegisterNumber: "940915-24779",     email: "brent_eggerickx@hotmail.com",     phone: "0479975581",       wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-24T11:45:00") },
+    { firstName: "Gert",      lastName: "Verbieren",       dateOfBirth: "1974-06-21", gender: "M", address: "Kapelstraat 36 3110 Rotselaar",             nationalRegisterNumber: "74.06.21-295.89",  email: "gert.verbieren@telenet.be",       phone: "0476 76 2410",     wielerclub: null,                       raceCategory: RaceCategory.FUN_WEDSTRIJD,     status: RegistrationStatus.APPROVED, timestamp: new Date("2025-04-30T08:01:00") },
+  ];
+
+  for (const r of registrationsData) {
+    const existing = await prisma.registration.findFirst({
+      where: { nationalRegisterNumber: r.nationalRegisterNumber, raceCategory: r.raceCategory },
+    });
+    if (!existing) {
+      await prisma.registration.create({ data: r });
+    }
+  }
+
+  console.log("  ✔  Cycling registrations");
+
+  await prisma.registrationSettings.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, isOpen: true, dorpelingenkoersLimit: null, funWedstrijdLimit: null },
+  });
+
+  console.log("  ✔  Registration settings");
+
   // ── Historisch toernooi 2025 ───────────────────────────────────────────────
 
   const t25 = await prisma.tournament.upsert({
@@ -714,15 +792,15 @@ Wijzigingen ten opzichte van vorig jaar:
 
   console.log("\n✅  Seed voltooid!");
   console.log("\n   Admin logins (wachtwoord voor iedereen: Password123!):");
-  console.log("   wannes.persyn@deflosj.be");
-  console.log("   arne.vandepoel@deflosj.be");
-  console.log("   gert.verbiern@deflosj.be");
-  console.log("   jannes.devesse@deflosj.be");
-  console.log("   joppe.vanloye@deflosj.be");
-  console.log("   liselot.persyn@deflosj.be");
-  console.log("   michiel.janssens@deflosj.be");
-  console.log("   pieter.david@deflosj.be");
-  console.log("   roel.debecker@deflosj.be\n");
+  console.log("   wannes.persyn@gmail.com");
+  console.log("   arne.vandepoel@gmail.com");
+  console.log("   gert.verbiern@gmail.com");
+  console.log("   jannes.devesse@gmail.com");
+  console.log("   joppe.vanloye@gmail.com");
+  console.log("   liselot.persyn@gmail.com");
+  console.log("   michiel.janssens@gmail.com");
+  console.log("   pieter.david@gmail.com");
+  console.log("   roel.debecker@gmail.com\n");
 }
 
 main()
