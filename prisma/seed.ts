@@ -1,83 +1,120 @@
+/* eslint-disable no-console */
 import { PrismaClient, UserRole, SponsorTier, MsgStatus, Phase } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-async function main() {
+async function main(): Promise<void> {
   console.log("🌱  Seeding database…");
 
   // ── Users ──────────────────────────────────────────────────────────────────
 
   const passwordHash = await bcrypt.hash("Password123!", 10);
 
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@deflosj.be" },
+  const wannes = await prisma.user.upsert({
+    where: { email: "wannes.persyn@deflosj.be" },
     update: {},
     create: {
-      email: "admin@deflosj.be",
-      username: "admin",
+      email: "wannes.persyn@deflosj.be",
+      username: "wannes.persyn",
       password: passwordHash,
       role: UserRole.ADMIN,
       isActive: true,
     },
   });
 
-  const captain1 = await prisma.user.upsert({
-    where: { email: "luca.janssen@deflosj.be" },
+  const arne = await prisma.user.upsert({
+    where: { email: "arne.vandepoel@deflosj.be" },
     update: {},
     create: {
-      email: "luca.janssen@deflosj.be",
-      username: "luca.janssen",
+      email: "arne.vandepoel@deflosj.be",
+      username: "arne.vandepoel",
       password: passwordHash,
-      role: UserRole.CAPTAIN,
+      role: UserRole.ADMIN,
       isActive: true,
     },
   });
 
-  const captain2 = await prisma.user.upsert({
-    where: { email: "nina.declercq@deflosj.be" },
+  const gert = await prisma.user.upsert({
+    where: { email: "gert.verbiern@deflosj.be" },
     update: {},
     create: {
-      email: "nina.declercq@deflosj.be",
-      username: "nina.declercq",
+      email: "gert.verbiern@deflosj.be",
+      username: "gert.verbiern",
       password: passwordHash,
-      role: UserRole.CAPTAIN,
+      role: UserRole.ADMIN,
       isActive: true,
     },
   });
 
-  const member1 = await prisma.user.upsert({
-    where: { email: "thomas.vermeersch@deflosj.be" },
+  const jannes = await prisma.user.upsert({
+    where: { email: "jannes.devesse@deflosj.be" },
     update: {},
     create: {
-      email: "thomas.vermeersch@deflosj.be",
-      username: "thomas.vermeersch",
+      email: "jannes.devesse@deflosj.be",
+      username: "jannes.devesse",
       password: passwordHash,
-      role: UserRole.MEMBER,
+      role: UserRole.ADMIN,
       isActive: true,
     },
   });
 
-  const member2 = await prisma.user.upsert({
-    where: { email: "elien.devos@deflosj.be" },
+  const joppe = await prisma.user.upsert({
+    where: { email: "joppe.vanloye@deflosj.be" },
     update: {},
     create: {
-      email: "elien.devos@deflosj.be",
-      username: "elien.devos",
+      email: "joppe.vanloye@deflosj.be",
+      username: "joppe.vanloye",
       password: passwordHash,
-      role: UserRole.MEMBER,
+      role: UserRole.ADMIN,
       isActive: true,
     },
   });
 
-  const member3 = await prisma.user.upsert({
-    where: { email: "bram.pieters@deflosj.be" },
+  const liselot = await prisma.user.upsert({
+    where: { email: "liselot.persyn@deflosj.be" },
     update: {},
     create: {
-      email: "bram.pieters@deflosj.be",
-      username: "bram.pieters",
+      email: "liselot.persyn@deflosj.be",
+      username: "liselot.persyn",
       password: passwordHash,
-      role: UserRole.MEMBER,
+      role: UserRole.ADMIN,
+      isActive: true,
+    },
+  });
+
+  const michiel = await prisma.user.upsert({
+    where: { email: "michiel.janssens@deflosj.be" },
+    update: {},
+    create: {
+      email: "michiel.janssens@deflosj.be",
+      username: "michiel.janssens",
+      password: passwordHash,
+      role: UserRole.ADMIN,
+      isActive: true,
+    },
+  });
+
+  const pieter = await prisma.user.upsert({
+    where: { email: "pieter.david@deflosj.be" },
+    update: {},
+    create: {
+      email: "pieter.david@deflosj.be",
+      username: "pieter.david",
+      password: passwordHash,
+      role: UserRole.ADMIN,
+      isActive: true,
+    },
+  });
+
+  const roel = await prisma.user.upsert({
+    where: { email: "roel.debecker@deflosj.be" },
+    update: {},
+    create: {
+      email: "roel.debecker@deflosj.be",
+      username: "roel.debecker",
+      password: passwordHash,
+      role: UserRole.ADMIN,
       isActive: true,
     },
   });
@@ -87,81 +124,109 @@ async function main() {
   // ── Member profiles ────────────────────────────────────────────────────────
 
   await prisma.memberProfile.upsert({
-    where: { userId: admin.id },
+    where: { userId: wannes.id },
     update: {},
     create: {
-      userId: admin.id,
-      firstName: "Admin",
-      lastName: "De Flosj",
-      bio: "Verantwoordelijk voor het beheer van de vereniging.",
+      userId: wannes.id,
+      firstName: "Wannes",
+      lastName: "Persyn",
       joinedAt: new Date("2020-01-01"),
-      isPublic: false,
-    },
-  });
-
-  await prisma.memberProfile.upsert({
-    where: { userId: captain1.id },
-    update: {},
-    create: {
-      userId: captain1.id,
-      firstName: "Luca",
-      lastName: "Janssen",
-      phone: "+32 475 11 22 33",
-      bio: "Aanvoerder van team De Vlaamse Arend. Al meer dan 5 jaar actief bij De Flosj.",
-      joinedAt: new Date("2019-03-15"),
       isPublic: true,
     },
   });
 
   await prisma.memberProfile.upsert({
-    where: { userId: captain2.id },
+    where: { userId: arne.id },
     update: {},
     create: {
-      userId: captain2.id,
-      firstName: "Nina",
-      lastName: "Declercq",
-      phone: "+32 476 44 55 66",
-      bio: "Kapitein van team De Witte Molen. Enthousiast lid en drijvende kracht.",
-      joinedAt: new Date("2020-06-01"),
+      userId: arne.id,
+      firstName: "Arne",
+      lastName: "Vandepoel",
+      joinedAt: new Date("2020-01-01"),
       isPublic: true,
     },
   });
 
   await prisma.memberProfile.upsert({
-    where: { userId: member1.id },
+    where: { userId: gert.id },
     update: {},
     create: {
-      userId: member1.id,
-      firstName: "Thomas",
-      lastName: "Vermeersch",
-      bio: "Vast gezicht op elk evenement van De Flosj.",
-      joinedAt: new Date("2021-09-10"),
+      userId: gert.id,
+      firstName: "Gert",
+      lastName: "Verbieren",
+      joinedAt: new Date("2020-01-01"),
       isPublic: true,
     },
   });
 
   await prisma.memberProfile.upsert({
-    where: { userId: member2.id },
+    where: { userId: jannes.id },
     update: {},
     create: {
-      userId: member2.id,
-      firstName: "Elien",
-      lastName: "Devos",
-      phone: "+32 478 77 88 99",
-      joinedAt: new Date("2022-01-20"),
+      userId: jannes.id,
+      firstName: "Jannes",
+      lastName: "Devesse",
+      joinedAt: new Date("2020-01-01"),
       isPublic: true,
     },
   });
 
   await prisma.memberProfile.upsert({
-    where: { userId: member3.id },
+    where: { userId: joppe.id },
     update: {},
     create: {
-      userId: member3.id,
-      firstName: "Bram",
-      lastName: "Pieters",
-      bio: "Nieuwste aanwinst van de vereniging. Vol enthousiasme!",
-      joinedAt: new Date("2023-04-05"),
+      userId: joppe.id,
+      firstName: "Joppe",
+      lastName: "Van Loye",
+      joinedAt: new Date("2020-01-01"),
+      isPublic: true,
+    },
+  });
+
+  await prisma.memberProfile.upsert({
+    where: { userId: liselot.id },
+    update: {},
+    create: {
+      userId: liselot.id,
+      firstName: "Liselot",
+      lastName: "Persyn",
+      joinedAt: new Date("2020-01-01"),
+      isPublic: true,
+    },
+  });
+
+  await prisma.memberProfile.upsert({
+    where: { userId: michiel.id },
+    update: {},
+    create: {
+      userId: michiel.id,
+      firstName: "Michiel",
+      lastName: "Janssens",
+      joinedAt: new Date("2020-01-01"),
+      isPublic: true,
+    },
+  });
+
+  await prisma.memberProfile.upsert({
+    where: { userId: pieter.id },
+    update: {},
+    create: {
+      userId: pieter.id,
+      firstName: "Pieter",
+      lastName: "David",
+      joinedAt: new Date("2020-01-01"),
+      isPublic: true,
+    },
+  });
+
+  await prisma.memberProfile.upsert({
+    where: { userId: roel.id },
+    update: {},
+    create: {
+      userId: roel.id,
+      firstName: "Roel",
+      lastName: "Debecker",
+      joinedAt: new Date("2020-01-01"),
       isPublic: true,
     },
   });
@@ -174,7 +239,7 @@ async function main() {
     where: { slug: "seizoensstart-2025" },
     update: {},
     create: {
-      authorId: admin.id,
+      authorId: wannes.id,
       title: "Seizoensstart 2025 — De Flosj is er klaar voor!",
       slug: "seizoensstart-2025",
       body: `Na een geslaagde winterpauze trapt De Flosj het nieuwe seizoen af met een vernieuwde ploeg en een heleboel ambitie.
@@ -190,7 +255,7 @@ Schrijf alvast de data in je agenda en volg onze website voor de laatste nieuwtj
     where: { slug: "inschrijvingen-toernooi-2025-open" },
     update: {},
     create: {
-      authorId: admin.id,
+      authorId: wannes.id,
       title: "Inschrijvingen toernooi 2025 zijn geopend",
       slug: "inschrijvingen-toernooi-2025-open",
       body: `Vanaf vandaag kunnen teams zich inschrijven voor het jaarlijkse De Flosj Toernooi. Dit jaar verwachten we meer dan 16 deelnemende ploegen uit de Vlaamse Ardennen en omstreken.
@@ -206,7 +271,7 @@ Wees er snel bij — het aantal plaatsen is beperkt! De deadline voor inschrijvi
     where: { slug: "nieuwe-sponsor-bakkerij-van-acker" },
     update: {},
     create: {
-      authorId: admin.id,
+      authorId: wannes.id,
       title: "Welkom bij onze nieuwe sponsor: Bakkerij Van Acker",
       slug: "nieuwe-sponsor-bakkerij-van-acker",
       body: `De Flosj verwelkomt met trots Bakkerij Van Acker als nieuwe sponsor voor het seizoen 2025.
@@ -222,7 +287,7 @@ Bezoek zeker hun winkel in het dorpscentrum en geniet van hun ambachtelijke prod
     where: { slug: "terugblik-dorpelingenkoers-2024" },
     update: {},
     create: {
-      authorId: admin.id,
+      authorId: wannes.id,
       title: "Terugblik op de Dorpelingenkoers 2024",
       slug: "terugblik-dorpelingenkoers-2024",
       body: `De Dorpelingenkoers van 2024 was opnieuw een groot succes! Met meer dan 120 deelnemers en honderden toeschouwers langs het parcours was het een onvergetelijke dag.
@@ -238,7 +303,7 @@ We bedanken alle vrijwilligers, sponsors en deelnemers die dit evenement elk jaa
     where: { slug: "update-reglement-toernooi-2025" },
     update: {},
     create: {
-      authorId: admin.id,
+      authorId: wannes.id,
       title: "Update toernooireglement 2025 — concept",
       slug: "update-reglement-toernooi-2025",
       body: `Dit artikel is nog niet gepubliceerd. Het bevat de conceptversie van het toernooireglement voor 2025 die nog goedgekeurd moet worden door het bestuur.
@@ -259,7 +324,7 @@ Wijzigingen ten opzichte van vorig jaar:
     where: { id: 1 },
     update: {},
     create: {
-      createdById: admin.id,
+      createdById: wannes.id,
       title: "De Flosj Toernooi 2025",
       description: "Het jaarlijkse De Flosj voetbaltoernooi voor ploegen uit de Vlaamse Ardennen. Teams van 4 veldspelers + keeper. Inschrijven vereist.",
       location: "Sporthal De Klaverkouter, Brakel",
@@ -273,7 +338,7 @@ Wijzigingen ten opzichte van vorig jaar:
     where: { id: 2 },
     update: {},
     create: {
-      createdById: admin.id,
+      createdById: wannes.id,
       title: "Dorpelingenkoers 2025",
       description: "De jaarlijkse wielerwedstrijd voor dorpelingen. Open voor alle leeftijdscategorieën. Inschrijving aan de start.",
       location: "Marktplein, Brakel",
@@ -283,88 +348,65 @@ Wijzigingen ten opzichte van vorig jaar:
     },
   });
 
-  await prisma.event.upsert({
-    where: { id: 3 },
-    update: {},
-    create: {
-      createdById: admin.id,
-      title: "Barbecue voor leden",
-      description: "Jaarlijkse barbecue voor leden en hun families. Gratis voor leden, kleine bijdrage voor niet-leden.",
-      location: "Verenigingslokaal De Flosj",
-      startsAt: new Date("2025-07-12T17:00:00"),
-      endsAt: new Date("2025-07-12T22:00:00"),
-      isPublished: true,
-    },
-  });
-
-  await prisma.event.upsert({
-    where: { id: 4 },
-    update: {},
-    create: {
-      createdById: admin.id,
-      title: "Algemene vergadering 2025",
-      description: "Jaarlijkse algemene vergadering van De Flosj. Agenda: jaarverslag, financiën, plannen 2026. Aanwezigheid verplicht voor bestuursleden.",
-      location: "Café 't Centrum, Brakel",
-      startsAt: new Date("2025-11-08T19:30:00"),
-      endsAt: new Date("2025-11-08T21:30:00"),
-      isPublished: false,
-    },
-  });
-
   console.log("  ✔  Events");
 
   // ── Sponsors ───────────────────────────────────────────────────────────────
 
   const sponsorsData = [
-    {
-      name: "Brouwerij De Kroon",
-      tier: SponsorTier.MAIN,
-      websiteUrl: "https://www.brouwerijdekroon.be",
-      isActive: true,
-      sortOrder: 1,
-    },
-    {
-      name: "Bakkerij Van Acker",
-      tier: SponsorTier.GOLD,
-      websiteUrl: null,
-      isActive: true,
-      sortOrder: 2,
-    },
-    {
-      name: "Garage Declercq",
-      tier: SponsorTier.GOLD,
-      websiteUrl: null,
-      isActive: true,
-      sortOrder: 3,
-    },
-    {
-      name: "Frituur De Hoek",
-      tier: SponsorTier.STANDARD,
-      websiteUrl: null,
-      isActive: true,
-      sortOrder: 4,
-    },
-    {
-      name: "Tuinaanleg Pieters",
-      tier: SponsorTier.STANDARD,
-      websiteUrl: null,
-      isActive: true,
-      sortOrder: 5,
-    },
-    {
-      name: "Apotheek Vandenberghe",
-      tier: SponsorTier.STANDARD,
-      websiteUrl: null,
-      isActive: true,
-      sortOrder: 6,
-    },
-    {
-      name: "Immokantoor Centrum",
-      tier: SponsorTier.STANDARD,
-      websiteUrl: null,
-      isActive: false,
-      sortOrder: 7,
-    },
+    // Main tier (450+)
+    { name: "APGV",                    tier: SponsorTier.MAIN,     websiteUrl: null, isActive: true, sortOrder:  1 },
+    { name: "Garage Vanderborght",     tier: SponsorTier.MAIN,     websiteUrl: null, isActive: true, sortOrder:  2 },
+    { name: "Het Poetsteam",           tier: SponsorTier.MAIN,     websiteUrl: null, isActive: true, sortOrder:  3 },
+    { name: "De Zijbeuk",              tier: SponsorTier.MAIN,     websiteUrl: null, isActive: true, sortOrder:  4 },
+    { name: "Michiel Janssens",        tier: SponsorTier.MAIN,     websiteUrl: null, isActive: true, sortOrder:  5 },
+    // Gold tier (450)
+    { name: "Aaron Casteels",          tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder:  6 },
+    { name: "Argenta",                 tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder:  7 },
+    { name: "BT tuinen",               tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder:  8 },
+    { name: "BW works",                tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder:  9 },
+    { name: "Connect Now / Wild Wines",tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 10 },
+    { name: "De Hijsbeer",             tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 11 },
+    { name: "Electro Bries",           tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 12 },
+    { name: "Fortis / Alteraar",       tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 13 },
+    { name: "Frituur De Wip",          tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 14 },
+    { name: "Goeron",                  tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 15 },
+    { name: "Het Interieurteam",       tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 16 },
+    { name: "Huis Staes",              tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 17 },
+    { name: "ijshoorntje",             tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 18 },
+    { name: "Immo Francois",           tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 19 },
+    { name: "Jan Stas",                tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 20 },
+    { name: "JHworkx",                 tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 21 },
+    { name: "Kaapwijn",                tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 22 },
+    { name: "Kapper Kathleen",         tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 23 },
+    { name: "Kim stuyckens",           tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 24 },
+    { name: "KnippoVero",              tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 25 },
+    { name: "Magnolia",                tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 26 },
+    { name: "Niftix",                  tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 27 },
+    { name: "Onan koffie",             tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 28 },
+    { name: "Persoons",                tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 29 },
+    { name: "Red EMU",                 tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 30 },
+    { name: "Schoovaerts Dirk",        tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 31 },
+    { name: "Service Koel",            tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 32 },
+    { name: "SPAR Wijgmaal",           tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 33 },
+    { name: "Sportoase",               tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 34 },
+    { name: "Sportpret",               tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 35 },
+    { name: "t Wit Madammeke",         tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 36 },
+    { name: "VBM Verzekeringen",       tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 37 },
+    { name: "Vejotech",                tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 38 },
+    { name: "Vermaelen en Demuynck",   tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 39 },
+    { name: "Vitesse fietsen",         tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 40 },
+    { name: "Wimmar",                  tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 41 },
+    { name: "Zippola",                 tier: SponsorTier.GOLD,     websiteUrl: null, isActive: true, sortOrder: 42 },
+    // Standard tier (200)
+    { name: "Autocenter Hein",         tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 43 },
+    { name: "De Skipastory",           tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 44 },
+    { name: "Dstny",                   tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 45 },
+    { name: "Paul Dechamps",           tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 46 },
+    { name: "Rodenbach Centrum",       tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 47 },
+    { name: "Sfeer en licht",          tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 48 },
+    { name: "Trattoria 2000",          tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 49 },
+    { name: "TripleDouble",            tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 50 },
+    { name: "Ynteriors",               tier: SponsorTier.STANDARD, websiteUrl: null, isActive: true, sortOrder: 51 },
   ];
 
   for (const s of sponsorsData) {
@@ -424,210 +466,263 @@ Wijzigingen ten opzichte van vorig jaar:
 
   console.log("  ✔  Contact messages");
 
-  // ── Tournament ─────────────────────────────────────────────────────────────
+  // ── Historisch toernooi 2025 ───────────────────────────────────────────────
 
-  const tournament = await prisma.tournament.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      name: "De Flosj Toernooi 2025",
-      year: 2025,
-      isActive: true,
-    },
-  });
-
-  await prisma.tournamentRules.upsert({
-    where: { tournamentId: tournament.id },
-    update: {},
-    create: {
-      tournamentId: tournament.id,
-      description: `Reglement De Flosj Toernooi 2025
-
-1. Elke ploeg bestaat uit 4 veldspelers en 1 keeper (5 spelers totaal).
-2. De groepsfase wordt gespeeld in pouletjes van 4 ploegen (round-robin).
-3. Puntentelling: 3 punten voor een overwinning, 1 punt gelijkspel, 0 voor verlies.
-4. Bij gelijke punten telt het doelsaldo, daarna de meeste doelpunten, daarna een tiebreak.
-5. De twee beste ploegen per poule gaan door naar de knock-outfase.
-6. Matchen in de knock-outfase: 2 × 8 minuten. Bij gelijkstand: penalty's.
-7. Spelers moeten ingeschreven zijn bij hun ploeg voor aanvang van het toernooi.
-8. Eerlijk en sportief spel is verplicht. Rood kaart = uitsluiting voor de rest van het toernooi.`,
-    },
-  });
-
-  const pouleA = await prisma.poule.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      tournamentId: tournament.id,
-      name: "Poule A",
-      phase: Phase.GROUP,
-    },
-  });
-
-  const pouleB = await prisma.poule.upsert({
+  const t25 = await prisma.tournament.upsert({
     where: { id: 2 },
-    update: {},
-    create: {
-      tournamentId: tournament.id,
-      name: "Poule B",
-      phase: Phase.GROUP,
-    },
+    update: { name: "De Flosj Toernooi 2025", year: 2025, status: "COMPLETED" },
+    create: { id: 2, name: "De Flosj Toernooi 2025", year: 2025, isActive: false, status: "COMPLETED", teamsPerPoule: 4, teamsAdvancingPerPoule: 2 },
   });
 
-  const teamsData = [
-    // Poule A
-    { id: 1, name: "De Vlaamse Arend",  captainId: captain1.id, pouleId: pouleA.id, captainName: "Luca Janssen",     speler1: "Luca Janssen",      speler2: "Tom Declercq",        speler3: "Wout Pieters",        speler4: "Jens Bogaert" },
-    { id: 2, name: "De Witte Molen",    captainId: captain2.id, pouleId: pouleA.id, captainName: "Nina Declercq",    speler1: "Nina Declercq",     speler2: "Hanne Devos",         speler3: "Lisa Maes",           speler4: "Sara Coussement" },
-    { id: 3, name: "FC De Klaver",      captainId: null,        pouleId: pouleA.id, captainName: "Kobe Vermeersch",  speler1: "Kobe Vermeersch",   speler2: "Sander Janssens",     speler3: "Ruben De Wolf",       speler4: "Tibo Claeys" },
-    { id: 4, name: "Den Djoef",         captainId: null,        pouleId: pouleA.id, captainName: "Mathis Peeters",   speler1: "Mathis Peeters",    speler2: "Arnaud Willems",      speler3: "Baptiste Leclercq",   speler4: "Sébastien Dubois" },
-    // Poule B
-    { id: 5, name: "De Ronse Boys",     captainId: null,        pouleId: pouleB.id, captainName: "Stef Vandenberghe", speler1: "Stef Vandenberghe", speler2: "Niels Claes",        speler3: "Dieter Bonte",        speler4: "Glenn Hoste" },
-    { id: 6, name: "Gezelle FC",        captainId: null,        pouleId: pouleB.id, captainName: "Bavo Geerts",      speler1: "Bavo Geerts",       speler2: "Lennart Nijs",        speler3: "Florian Baert",       speler4: "Matteo Vanden Berghe" },
-    { id: 7, name: "De Kattekoppen",    captainId: null,        pouleId: pouleB.id, captainName: "Joren Desmet",     speler1: "Joren Desmet",      speler2: "Bert Lambrecht",      speler3: "Nico Goossens",       speler4: "Axel Raes" },
-    { id: 8, name: "Flandria United",   captainId: null,        pouleId: pouleB.id, captainName: "Quinten Mertens",  speler1: "Quinten Mertens",   speler2: "Remi Stevens",        speler3: "Lukas Cools",         speler4: "Nathan Wouters" },
-  ];
+  for (const p of [
+    { id: 145, name: "Poule A" }, { id: 146, name: "Poule B" }, { id: 147, name: "Poule C" },
+    { id: 148, name: "Poule D" }, { id: 149, name: "Poule E" }, { id: 150, name: "Poule F" },
+    { id: 151, name: "Poule G" }, { id: 152, name: "Poule H" }, { id: 153, name: "Poule I" },
+    { id: 154, name: "Poule J" }, { id: 155, name: "Poule K" }, { id: 156, name: "Poule L" },
+  ]) {
+    await prisma.poule.upsert({
+      where: { id: p.id },
+      update: {},
+      create: { id: p.id, tournamentId: t25.id, name: p.name, phase: Phase.GROUP },
+    });
+  }
 
-  for (const t of teamsData) {
+  console.log("  ✔  Poules 2025");
+
+  for (const t of [
+    { id: 145, pouleId: 151, name: "Wouters & co",                   captainName: "Els Wouters",          s1: "Els Wouters",         s2: "Ann",                    s3: "Caroline",            s4: "Wim",                   played: 3, won: 1, drawn: 0, lost: 2, gf:  9, ga: 13, saldo:  -4, pts:  2 },
+    { id: 146, pouleId: 147, name: "Bayernvrienden",                  captainName: "Eric Meyers",          s1: "Eric Meyers",         s2: "Frank Staes",            s3: "Kris Uytterhoeven",   s4: "Filip Gomand",          played: 3, won: 1, drawn: 0, lost: 2, gf: 12, ga: 19, saldo:  -7, pts:  2 },
+    { id: 147, pouleId: 150, name: "Kanunniken van De Zijbeuk",       captainName: "Robert Pues",          s1: "Robert Pues",         s2: "Hugo",                   s3: "Philippe",            s4: "Erik",                  played: 3, won: 0, drawn: 0, lost: 3, gf:  7, ga: 28, saldo: -21, pts:  0 },
+    { id: 148, pouleId: 155, name: "De Scheve Schieters",             captainName: "Valkenaers Eddy",      s1: "Valkenaers Eddy",     s2: "Bart Anthoon",           s3: "Granger Stehane",     s4: "Bart Storms",           played: 6, won: 4, drawn: 0, lost: 2, gf: 46, ga: 21, saldo:  25, pts:  8 },
+    { id: 149, pouleId: 153, name: "De Boulettekes",                  captainName: "Veronique Bliki",      s1: "Veronique Bliki",     s2: "Ann Luyckx",             s3: "Arne Sophie",         s4: "Stefanie Gewelt",       played: 5, won: 3, drawn: 0, lost: 2, gf: 25, ga: 24, saldo:   1, pts:  6 },
+    { id: 150, pouleId: 150, name: "The Founding Fathers",            captainName: "Wouter",               s1: "Wouter",              s2: "Dries",                  s3: "Bram",                s4: "Pieter-Jan",            played: 8, won: 7, drawn: 0, lost: 1, gf: 61, ga: 18, saldo:  43, pts: 14 },
+    { id: 151, pouleId: 155, name: "4 Pinten Vast",                   captainName: "Ferre Sterckx",        s1: "Ferre Sterckx",       s2: "Wout Verbieren",         s3: "Eppe De Meersman",    s4: "Jannes Devesse",        played: 5, won: 3, drawn: 0, lost: 2, gf: 29, ga: 23, saldo:   6, pts:  6 },
+    { id: 152, pouleId: 148, name: "De Losse Pols",                   captainName: "Daron Marina",         s1: "Daron Marina",        s2: "Hoeterickx Sven",        s3: "Vandepoel Mark",      s4: "Debecker Roel",         played: 5, won: 3, drawn: 0, lost: 2, gf: 38, ga: 24, saldo:  14, pts:  6 },
+    { id: 153, pouleId: 152, name: "Vieze Asbak",                     captainName: "Simon David",          s1: "Simon David",         s2: "Sverre Sophie",          s3: "Giuseppe Angelilo",   s4: "Carlos Mazimpaka",      played: 3, won: 0, drawn: 2, lost: 1, gf:  9, ga: 19, saldo: -10, pts:  2 },
+    { id: 154, pouleId: 148, name: "Jacobs Vrienden",                  captainName: "Mario Clé",           s1: "Mario Clé",           s2: "Bert Renap",             s3: "Steven Wouters",      s4: "Rudi Scheurs",          played: 8, won: 6, drawn: 0, lost: 2, gf: 64, ga: 41, saldo:  23, pts: 12 },
+    { id: 155, pouleId: 154, name: "Team N-VA",                        captainName: "Elke",                s1: "Jan Schrijvers",       s2: "Robbe",                  s3: "Bart",                s4: "Elke",                  played: 3, won: 1, drawn: 0, lost: 2, gf: 10, ga: 20, saldo: -10, pts:  2 },
+    { id: 156, pouleId: 147, name: "Ballen & Booze",                   captainName: "Ben Voets",           s1: "Ben Voets",           s2: "Jeroen Degent",          s3: "Jannes Van Hyfte",    s4: "Sam Eeckhout",          played: 6, won: 3, drawn: 0, lost: 3, gf: 31, ga: 21, saldo:  10, pts:  6 },
+    { id: 157, pouleId: 149, name: "Stuikers",                         captainName: "Toon Coremans",       s1: "Toon Coremans",       s2: "Joren Wouters",          s3: "Dries van Weyenberg", s4: "Tjeu Vandezande",       played: 8, won: 6, drawn: 0, lost: 2, gf: 62, ga: 39, saldo:  23, pts: 12 },
+    { id: 158, pouleId: 149, name: "Ibiza Girls",                      captainName: "Katrien Lemberechts", s1: "Katrien Lemberechts", s2: "Jan Lemberechts",        s3: "Els Costers",         s4: "Kris Baeten",           played: 6, won: 3, drawn: 1, lost: 2, gf: 38, ga: 34, saldo:   4, pts:  7 },
+    { id: 159, pouleId: 152, name: "Balpetank",                        captainName: "Hans Sterckx",        s1: "Stekke",              s2: "Christof",               s3: "Bram",                s4: "Wouter",                played: 4, won: 1, drawn: 1, lost: 2, gf: 21, ga: 20, saldo:   1, pts:  3 },
+    { id: 160, pouleId: 151, name: "De Boule Babes",                   captainName: "Lisa Baeten",         s1: "Lisa",                s2: "Nien",                   s3: "Hélène",              s4: "Nore",                  played: 5, won: 2, drawn: 0, lost: 3, gf: 19, ga: 32, saldo: -13, pts:  4 },
+    { id: 161, pouleId: 145, name: "De Ketsers",                       captainName: "Femke Van Tongelen",  s1: "Femke Van Tongelen",  s2: "Brigitte Vernelen",      s3: ".",                   s4: ".",                     played: 3, won: 1, drawn: 0, lost: 2, gf:  6, ga: 19, saldo: -13, pts:  2 },
+    { id: 162, pouleId: 146, name: "The Fishwives Club",               captainName: "Inge Van Hellemont",  s1: "Inge Van Hellemont",  s2: "Nikki Van Langendonck",  s3: "Leoni Smedts",        s4: "Annelies Verdeyen",     played: 3, won: 1, drawn: 0, lost: 2, gf: 13, ga: 14, saldo:  -1, pts:  2 },
+    { id: 163, pouleId: 146, name: "De Spekjes",                       captainName: "Rebecca Serneels",    s1: "Rebecca",             s2: "Evi",                    s3: "Dennis",              s4: "Kenneth",               played: 4, won: 2, drawn: 0, lost: 2, gf: 23, ga: 23, saldo:   0, pts:  4 },
+    { id: 164, pouleId: 148, name: "ADL (Achterheide Dijlekant Leeft)",captainName: "Hans Van Hyfte",      s1: "Hans Van Hyfte",      s2: "Marc Vermaelen",         s3: "Karl Hautekiet",      s4: "Gert Vermaelen",        played: 4, won: 2, drawn: 0, lost: 2, gf: 18, ga: 25, saldo:  -7, pts:  4 },
+    { id: 165, pouleId: 152, name: "De 5er",                           captainName: "Bart Wuestenberghs",  s1: "Bart",                s2: "Yves",                   s3: "Robin",               s4: "Ive",                   played: 4, won: 3, drawn: 0, lost: 1, gf: 24, ga: 15, saldo:   9, pts:  6 },
+    { id: 166, pouleId: 145, name: "Alé Boulézzz",                     captainName: "Jelle Wouters",       s1: "Jelle Wouters",       s2: "Nele Demuynck",          s3: "Tessa Heylighen",     s4: "Ann Van Criekinge",     played: 4, won: 1, drawn: 1, lost: 2, gf: 18, ga: 19, saldo:  -1, pts:  3 },
+    { id: 167, pouleId: 153, name: "Niftix",                           captainName: "Robbe Wuestenberghs", s1: "Jordi",               s2: "Michel",                 s3: "Koen",                s4: "Robbe",                 played: 5, won: 2, drawn: 0, lost: 3, gf: 26, ga: 32, saldo:  -6, pts:  4 },
+    { id: 168, pouleId: 153, name: "De Plakkers",                      captainName: "Lore",                s1: "Lore",                s2: "Janne",                  s3: "Fons",                s4: "Sonny",                 played: 8, won: 6, drawn: 0, lost: 2, gf: 46, ga: 25, saldo:  21, pts: 12 },
+    { id: 169, pouleId: 150, name: "Wij zullen het nooit kunnen",      captainName: "Geert",               s1: "Beelen",              s2: "Daan",                   s3: "Jonas",               s4: "Joeri",                 played: 4, won: 3, drawn: 0, lost: 1, gf: 21, ga: 12, saldo:   9, pts:  6 },
+    { id: 170, pouleId: 147, name: "Thursday After Work",              captainName: "Bart Goovaerts",      s1: "Bart Goovaerts",      s2: "Wener Baumans",          s3: "Luc Stroobants",      s4: "Kurt",                  played: 4, won: 2, drawn: 0, lost: 2, gf: 14, ga: 25, saldo: -11, pts:  4 },
+    { id: 171, pouleId: 156, name: "Buskopain",                        captainName: "Wim Hombroux",        s1: "Wim",                 s2: "Slemme",                 s3: "Jef",                 s4: "Koen",                  played: 3, won: 0, drawn: 1, lost: 2, gf: 10, ga: 27, saldo: -17, pts:  1 },
+    { id: 172, pouleId: 156, name: "De Stalen Ballen",                 captainName: "Kristof Vanschoote",  s1: "Kristof",             s2: "Wim",                    s3: "Paul",                s4: "Katrijn",               played: 3, won: 1, drawn: 0, lost: 2, gf: 10, ga: 15, saldo:  -5, pts:  2 },
+    { id: 173, pouleId: 156, name: "De Ôoikes",                        captainName: "Roel Wouters",        s1: "Roel",                s2: "Axel",                   s3: "Hendrik",             s4: "Fille",                 played: 4, won: 3, drawn: 0, lost: 1, gf: 36, ga: 12, saldo:  24, pts:  6 },
+    { id: 174, pouleId: 151, name: "Glory Balls",                      captainName: "Ynte De Wever",       s1: "Ynte De Wever",       s2: "Janick Demuynck",        s3: "Hans Speetjens",      s4: "Das",                   played: 4, won: 2, drawn: 0, lost: 2, gf: 26, ga: 13, saldo:  13, pts:  4 },
+    { id: 175, pouleId: 147, name: "De Blauwe Ballen",                 captainName: "Yann Van Wassenhove", s1: "Diego Rotty",         s2: "Jan Panier",             s3: "Frits Traets",        s4: "Yann Van Wassenhove",   played: 6, won: 4, drawn: 0, lost: 2, gf: 45, ga: 31, saldo:  14, pts:  8 },
+    { id: 176, pouleId: 155, name: "De Jufkes",                        captainName: "Lien Demuynck",       s1: "Lien Demuynck",       s2: "Bo Munnecom",            s3: "Janne Discart",       s4: "Ine Devos",             played: 3, won: 0, drawn: 0, lost: 3, gf:  7, ga: 25, saldo: -18, pts:  0 },
+    { id: 177, pouleId: 146, name: "De Zilverwitjes",                  captainName: "Filip Verboven",      s1: "Filip",               s2: "Kim",                    s3: "Benny",               s4: "Kenny",                 played: 5, won: 3, drawn: 0, lost: 2, gf: 27, ga: 28, saldo:  -1, pts:  6 },
+    { id: 178, pouleId: 154, name: "Tom Tom Manu",                     captainName: "Tom Verhaegen",       s1: "Tom Vanderelst",      s2: "Tom Verhaegen",          s3: "Manu",                s4: "Annelies",              played: 5, won: 3, drawn: 1, lost: 1, gf: 36, ga: 17, saldo:  19, pts:  7 },
+    { id: 179, pouleId: 155, name: "Stalen Parels",                    captainName: "Jef Huybrechts",      s1: "Jef Huybrechts",      s2: "Niel",                   s3: "Giovanni",            s4: "Lukas",                 played: 4, won: 2, drawn: 0, lost: 2, gf: 15, ga: 28, saldo: -13, pts:  4 },
+    { id: 180, pouleId: 154, name: "Theeznutz",                        captainName: "Bart Van Hout",       s1: "Bart",                s2: "Guido",                  s3: "Kenny",               s4: "Fille",                 played: 3, won: 0, drawn: 1, lost: 2, gf: 13, ga: 19, saldo:  -6, pts:  1 },
+    { id: 181, pouleId: 153, name: "De Scheefschieters",               captainName: "Mathias",             s1: "Mathias",             s2: "Jeroen",                 s3: "Michael",             s4: "Kim",                   played: 3, won: 1, drawn: 0, lost: 2, gf: 11, ga: 22, saldo: -11, pts:  2 },
+    { id: 182, pouleId: 152, name: "De Cnockaerts",                    captainName: "Freddy",              s1: "Freddy",              s2: "Tim",                    s3: "Fred",                s4: "Jef",                   played: 3, won: 0, drawn: 1, lost: 2, gf: 10, ga: 19, saldo:  -9, pts:  1 },
+    { id: 183, pouleId: 145, name: "De Bloempjes",                     captainName: "Shane Vanuytrecht",   s1: "Shane",               s2: "Jestin",                 s3: "Jeff",                s4: "Wouter",                played: 4, won: 1, drawn: 0, lost: 3, gf: 17, ga: 21, saldo:  -4, pts:  2 },
+    { id: 184, pouleId: 148, name: "Les Boulettes",                    captainName: "Barbara Gos",         s1: "Karen",               s2: "Inge",                   s3: "Caroline",            s4: "Kris",                  played: 3, won: 0, drawn: 0, lost: 3, gf: 11, ga: 26, saldo: -15, pts:  0 },
+    { id: 185, pouleId: 149, name: "Kaapwijn",                         captainName: "Johan Vergauwen",     s1: "Johan Vergauwen",     s2: "Victor",                 s3: "Koen",                s4: "Tom",                   played: 3, won: 0, drawn: 0, lost: 3, gf:  9, ga: 26, saldo: -17, pts:  0 },
+    { id: 186, pouleId: 146, name: "Coche au Chanel",                  captainName: "Jef Minten",          s1: "Michelle",            s2: "Jef",                    s3: "Marije",              s4: "Kevin",                 played: 5, won: 2, drawn: 0, lost: 3, gf: 21, ga: 33, saldo: -12, pts:  4 },
+    { id: 187, pouleId: 145, name: "Jeu De Bâles",                     captainName: "Flor Heyrman",        s1: "Douwe Sterckx",       s2: "Noa Tuyls",              s3: "Senne Van Roosbroek", s4: "Flor Heyrman",          played: 4, won: 2, drawn: 1, lost: 1, gf: 28, ga: 15, saldo:  13, pts:  5 },
+    { id: 188, pouleId: 154, name: "Suikers",                          captainName: "Hadwin Dedonder",     s1: "Martijn",             s2: "Hadwin",                 s3: "Kristien",            s4: "Catherine",             played: 4, won: 2, drawn: 0, lost: 2, gf: 19, ga: 26, saldo:  -7, pts:  4 },
+    { id: 189, pouleId: 151, name: "De Kookies",                       captainName: "Merel Bollen",        s1: "Dries Wouters",       s2: "Merel Bollen",           s3: "Claire",              s4: "Kyana",                 played: 4, won: 2, drawn: 0, lost: 2, gf: 12, ga: 17, saldo:  -5, pts:  4 },
+    { id: 190, pouleId: 156, name: "French Finesse",                   captainName: "Kaat Persyn",         s1: "Kaat",                s2: "Amber",                  s3: "Lau",                 s4: "Rosalie",               played: 4, won: 1, drawn: 1, lost: 2, gf: 11, ga: 22, saldo: -11, pts:  3 },
+    { id: 191, pouleId: 150, name: "De Mosselbank",                    captainName: "Jana Osselaer",       s1: "Jana Osselaer",       s2: "Joyce Cuypers",          s3: "Dorien Lambrechts",   s4: "Dorien Vanwyngaerden",  played: 3, won: 1, drawn: 0, lost: 2, gf:  7, ga: 12, saldo:  -5, pts:  2 },
+    { id: 192, pouleId: 149, name: "Team Vrije Tijd",                  captainName: "Sanne",               s1: "Tuur",                s2: "Wannes",                 s3: "Sanne",               s4: "",                      played: 4, won: 1, drawn: 1, lost: 2, gf: 20, ga: 32, saldo: -12, pts:  3 },
+  ]) {
     await prisma.team.upsert({
       where: { id: t.id },
       update: {},
       create: {
-        tournamentId: tournament.id,
-        captainId: t.captainId,
-        pouleId: t.pouleId,
-        name: t.name,
-        captainName: t.captainName,
-        speler1: t.speler1,
-        speler2: t.speler2,
-        speler3: t.speler3,
-        speler4: t.speler4,
+        id: t.id, tournamentId: t25.id, pouleId: t.pouleId, captainId: null,
+        name: t.name, captainName: t.captainName,
+        speler1: t.s1, speler2: t.s2, speler3: t.s3, speler4: t.s4,
+        played: t.played, won: t.won, drawn: t.drawn, lost: t.lost,
+        goalsFor: t.gf, goalsAgainst: t.ga, saldo: t.saldo, points: t.pts, isPresent: true,
       },
     });
   }
 
-  console.log("  ✔  Tournament, poules & teams");
+  console.log("  ✔  Teams 2025");
 
-  // ── Matches ────────────────────────────────────────────────────────────────
-  //
-  // Groepsfase Poule A (round-robin, 6 matchen)
-  //
-  //  1 vs 2 : De Vlaamse Arend  3–1  De Witte Molen    → winnaar: 1
-  //  3 vs 4 : FC De Klaver      2–2  Den Djoef          → gelijkspel
-  //  1 vs 3 : De Vlaamse Arend  2–0  FC De Klaver       → winnaar: 1
-  //  2 vs 4 : De Witte Molen    1–0  Den Djoef          → winnaar: 2
-  //  1 vs 4 : De Vlaamse Arend  4–1  Den Djoef          → winnaar: 1
-  //  2 vs 3 : De Witte Molen    1–2  FC De Klaver       → winnaar: 3
-  //
-  // Eindstand Poule A:  1. De Vlaamse Arend 9pts  2. FC De Klaver 4pts
-  //                     3. De Witte Molen 3pts    4. Den Djoef 1pt
-  //
-  // Groepsfase Poule B (round-robin, 6 matchen)
-  //
-  //  5 vs 6 : De Ronse Boys     0–1  Gezelle FC         → winnaar: 6
-  //  7 vs 8 : De Kattekoppen    3–2  Flandria United    → winnaar: 7
-  //  5 vs 7 : De Ronse Boys     1–1  De Kattekoppen     → gelijkspel
-  //  6 vs 8 : Gezelle FC        2–0  Flandria United    → winnaar: 6
-  //  5 vs 8 : De Ronse Boys     2–1  Flandria United    → winnaar: 5
-  //  6 vs 7 : Gezelle FC        1–2  De Kattekoppen     → winnaar: 7
-  //
-  // Eindstand Poule B:  1. De Kattekoppen 7pts  2. Gezelle FC 6pts
-  //                     3. De Ronse Boys 4pts   4. Flandria United 0pts
-  //
-  // Knock-out:
-  //  SF1: De Vlaamse Arend (A1) vs Gezelle FC (B2)   → 3–1  winnaar: 1
-  //  SF2: De Kattekoppen (B1)   vs FC De Klaver (A2) → 2–0  winnaar: 7
-  //  Troostfinale: Gezelle FC vs FC De Klaver         → 1–0  winnaar: 6
-  //  Finale: De Vlaamse Arend vs De Kattekoppen       → 2–1  winnaar: 1
-
-  const today = new Date("2025-06-21");
-  const t_ = (h: number, m: number): Date => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h, m);
-
-  const matchesData = [
-    // Poule A
-    { id:  1, pouleId: pouleA.id, teamAId: 1, teamBId: 2, scoreA: 3, scoreB: 1, winnerId: 1,    time: t_(9,  0),  track: 1, phase: Phase.GROUP,              bracketPos: null  },
-    { id:  2, pouleId: pouleA.id, teamAId: 3, teamBId: 4, scoreA: 2, scoreB: 2, winnerId: null, time: t_(9,  0),  track: 2, phase: Phase.GROUP,              bracketPos: null  },
-    { id:  3, pouleId: pouleA.id, teamAId: 1, teamBId: 3, scoreA: 2, scoreB: 0, winnerId: 1,    time: t_(9, 25),  track: 1, phase: Phase.GROUP,              bracketPos: null  },
-    { id:  4, pouleId: pouleA.id, teamAId: 2, teamBId: 4, scoreA: 1, scoreB: 0, winnerId: 2,    time: t_(9, 25),  track: 2, phase: Phase.GROUP,              bracketPos: null  },
-    { id:  5, pouleId: pouleA.id, teamAId: 1, teamBId: 4, scoreA: 4, scoreB: 1, winnerId: 1,    time: t_(9, 50),  track: 1, phase: Phase.GROUP,              bracketPos: null  },
-    { id:  6, pouleId: pouleA.id, teamAId: 2, teamBId: 3, scoreA: 1, scoreB: 2, winnerId: 3,    time: t_(9, 50),  track: 2, phase: Phase.GROUP,              bracketPos: null  },
-    // Poule B
-    { id:  7, pouleId: pouleB.id, teamAId: 5, teamBId: 6, scoreA: 0, scoreB: 1, winnerId: 6,    time: t_(9,  0),  track: 3, phase: Phase.GROUP,              bracketPos: null  },
-    { id:  8, pouleId: pouleB.id, teamAId: 7, teamBId: 8, scoreA: 3, scoreB: 2, winnerId: 7,    time: t_(9,  0),  track: 4, phase: Phase.GROUP,              bracketPos: null  },
-    { id:  9, pouleId: pouleB.id, teamAId: 5, teamBId: 7, scoreA: 1, scoreB: 1, winnerId: null, time: t_(9, 25),  track: 3, phase: Phase.GROUP,              bracketPos: null  },
-    { id: 10, pouleId: pouleB.id, teamAId: 6, teamBId: 8, scoreA: 2, scoreB: 0, winnerId: 6,    time: t_(9, 25),  track: 4, phase: Phase.GROUP,              bracketPos: null  },
-    { id: 11, pouleId: pouleB.id, teamAId: 5, teamBId: 8, scoreA: 2, scoreB: 1, winnerId: 5,    time: t_(9, 50),  track: 3, phase: Phase.GROUP,              bracketPos: null  },
-    { id: 12, pouleId: pouleB.id, teamAId: 6, teamBId: 7, scoreA: 1, scoreB: 2, winnerId: 7,    time: t_(9, 50),  track: 4, phase: Phase.GROUP,              bracketPos: null  },
-    // Halve finales
-    { id: 13, pouleId: null,      teamAId: 1, teamBId: 6, scoreA: 3, scoreB: 1, winnerId: 1,    time: t_(11,  0), track: 1, phase: Phase.SEMI,               bracketPos: "SF1" },
-    { id: 14, pouleId: null,      teamAId: 7, teamBId: 3, scoreA: 2, scoreB: 0, winnerId: 7,    time: t_(11,  0), track: 2, phase: Phase.SEMI,               bracketPos: "SF2" },
-    // Troostfinale
-    { id: 15, pouleId: null,      teamAId: 6, teamBId: 3, scoreA: 1, scoreB: 0, winnerId: 6,    time: t_(13,  0), track: 1, phase: Phase.CONSOLATION_FINAL,  bracketPos: "CF1" },
-    // Finale
-    { id: 16, pouleId: null,      teamAId: 1, teamBId: 7, scoreA: 2, scoreB: 1, winnerId: 1,    time: t_(14,  0), track: 1, phase: Phase.FINAL,              bracketPos: "F1"  },
+  const m25: Array<{ id: number; time: string; track: number; phase: Phase; bracketPos: string | null; scoreA: number; scoreB: number; pouleId: number | null; teamAId: number; teamBId: number; winnerId: number | null }> = [
+    // ── Groepsfase ────────────────────────────────────────────────────────────
+    // Track 1 – Poule A & B
+    { id: 1291, time: "2025-10-31T17:00:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB: 10, pouleId: 145, teamAId: 183, teamBId: 187, winnerId: 187 },
+    { id: 1292, time: "2025-10-31T17:20:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  8, scoreB:  7, pouleId: 146, teamAId: 163, teamBId: 186, winnerId: 163 },
+    { id: 1293, time: "2025-10-31T17:40:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  4, pouleId: 145, teamAId: 166, teamBId: 161, winnerId: 161 },
+    { id: 1294, time: "2025-10-31T18:00:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  6, pouleId: 146, teamAId: 162, teamBId: 177, winnerId: 177 },
+    { id: 1295, time: "2025-10-31T18:20:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  0, pouleId: 145, teamAId: 183, teamBId: 161, winnerId: 183 },
+    { id: 1296, time: "2025-10-31T18:40:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  7, scoreB:  1, pouleId: 146, teamAId: 163, teamBId: 177, winnerId: 163 },
+    { id: 1297, time: "2025-10-31T19:00:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  4, pouleId: 145, teamAId: 166, teamBId: 187, winnerId: null },
+    { id: 1298, time: "2025-10-31T19:20:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB:  4, pouleId: 146, teamAId: 162, teamBId: 186, winnerId: 186 },
+    { id: 1299, time: "2025-10-31T19:40:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  6, pouleId: 145, teamAId: 183, teamBId: 166, winnerId: 166 },
+    { id: 1300, time: "2025-10-31T20:00:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  7, pouleId: 146, teamAId: 163, teamBId: 162, winnerId: 162 },
+    { id: 1301, time: "2025-10-31T20:20:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA: 11, scoreB:  2, pouleId: 145, teamAId: 187, teamBId: 161, winnerId: 187 },
+    { id: 1302, time: "2025-10-31T20:40:00", track: 1, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB: 13, pouleId: 146, teamAId: 186, teamBId: 177, winnerId: 177 },
+    // Track 2 – Poule C & D
+    { id: 1303, time: "2025-10-31T17:00:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  6, scoreB:  7, pouleId: 147, teamAId: 156, teamBId: 175, winnerId: 175 },
+    { id: 1304, time: "2025-10-31T17:20:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA: 13, scoreB:  4, pouleId: 148, teamAId: 154, teamBId: 184, winnerId: 154 },
+    { id: 1305, time: "2025-10-31T17:40:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  8, scoreB:  1, pouleId: 147, teamAId: 146, teamBId: 170, winnerId: 146 },
+    { id: 1306, time: "2025-10-31T18:00:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  6, pouleId: 148, teamAId: 152, teamBId: 164, winnerId: 164 },
+    { id: 1307, time: "2025-10-31T18:20:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  4, pouleId: 147, teamAId: 156, teamBId: 170, winnerId: 170 },
+    { id: 1308, time: "2025-10-31T18:40:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  9, scoreB:  5, pouleId: 148, teamAId: 154, teamBId: 164, winnerId: 154 },
+    { id: 1309, time: "2025-10-31T19:00:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  1, scoreB: 10, pouleId: 147, teamAId: 146, teamBId: 175, winnerId: 175 },
+    { id: 1310, time: "2025-10-31T19:20:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  6, scoreB:  2, pouleId: 148, teamAId: 152, teamBId: 184, winnerId: 152 },
+    { id: 1311, time: "2025-10-31T19:40:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  8, scoreB:  3, pouleId: 147, teamAId: 156, teamBId: 146, winnerId: 156 },
+    { id: 1312, time: "2025-10-31T20:00:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  9, pouleId: 148, teamAId: 154, teamBId: 152, winnerId: 152 },
+    { id: 1313, time: "2025-10-31T20:20:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  7, pouleId: 147, teamAId: 175, teamBId: 170, winnerId: 170 },
+    { id: 1314, time: "2025-10-31T20:40:00", track: 2, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  7, pouleId: 148, teamAId: 184, teamBId: 164, winnerId: 164 },
+    // Track 3 – Poule E & F
+    { id: 1315, time: "2025-10-31T17:00:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  9, scoreB:  9, pouleId: 149, teamAId: 192, teamBId: 158, winnerId: null },
+    { id: 1316, time: "2025-10-31T17:20:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB: 12, pouleId: 150, teamAId: 147, teamBId: 150, winnerId: 150 },
+    { id: 1317, time: "2025-10-31T17:40:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB: 15, pouleId: 149, teamAId: 185, teamBId: 157, winnerId: 157 },
+    { id: 1318, time: "2025-10-31T18:00:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  1, pouleId: 150, teamAId: 169, teamBId: 191, winnerId: 169 },
+    { id: 1319, time: "2025-10-31T18:20:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  7, pouleId: 149, teamAId: 192, teamBId: 157, winnerId: 157 },
+    { id: 1320, time: "2025-10-31T18:40:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  5, pouleId: 150, teamAId: 147, teamBId: 191, winnerId: 191 },
+    { id: 1321, time: "2025-10-31T19:00:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  6, pouleId: 149, teamAId: 185, teamBId: 158, winnerId: 158 },
+    { id: 1322, time: "2025-10-31T19:20:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  3, pouleId: 150, teamAId: 169, teamBId: 150, winnerId: 169 },
+    { id: 1323, time: "2025-10-31T19:40:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  3, pouleId: 149, teamAId: 192, teamBId: 185, winnerId: 192 },
+    { id: 1324, time: "2025-10-31T20:00:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB: 11, pouleId: 150, teamAId: 147, teamBId: 169, winnerId: 169 },
+    { id: 1325, time: "2025-10-31T20:20:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  9, pouleId: 149, teamAId: 158, teamBId: 157, winnerId: 157 },
+    { id: 1326, time: "2025-10-31T20:40:00", track: 3, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  1, pouleId: 150, teamAId: 150, teamBId: 191, winnerId: 150 },
+    // Track 4 – Poule G & H
+    { id: 1327, time: "2025-10-31T17:00:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB: 10, pouleId: 151, teamAId: 160, teamBId: 174, winnerId: 174 },
+    { id: 1328, time: "2025-10-31T17:20:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA: 10, scoreB:  3, pouleId: 152, teamAId: 159, teamBId: 182, winnerId: 159 },
+    { id: 1329, time: "2025-10-31T17:40:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  1, scoreB:  4, pouleId: 151, teamAId: 145, teamBId: 189, winnerId: 189 },
+    { id: 1330, time: "2025-10-31T18:00:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  0, scoreB: 10, pouleId: 152, teamAId: 153, teamBId: 165, winnerId: 165 },
+    { id: 1331, time: "2025-10-31T18:20:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  6, pouleId: 151, teamAId: 160, teamBId: 189, winnerId: 189 },
+    { id: 1332, time: "2025-10-31T18:40:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  7, pouleId: 152, teamAId: 159, teamBId: 165, winnerId: 165 },
+    { id: 1333, time: "2025-10-31T19:00:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  3, pouleId: 151, teamAId: 145, teamBId: 174, winnerId: 145 },
+    { id: 1334, time: "2025-10-31T19:20:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  4, pouleId: 152, teamAId: 153, teamBId: 182, winnerId: null },
+    { id: 1335, time: "2025-10-31T19:40:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  6, scoreB:  4, pouleId: 151, teamAId: 160, teamBId: 145, winnerId: 160 },
+    { id: 1336, time: "2025-10-31T20:00:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  5, pouleId: 152, teamAId: 159, teamBId: 153, winnerId: null },
+    { id: 1337, time: "2025-10-31T20:20:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  7, scoreB:  0, pouleId: 151, teamAId: 174, teamBId: 189, winnerId: 174 },
+    { id: 1338, time: "2025-10-31T20:40:00", track: 4, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  5, pouleId: 152, teamAId: 182, teamBId: 165, winnerId: 165 },
+    // Track 5 – Poule I & J
+    { id: 1339, time: "2025-10-31T17:00:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  5, pouleId: 153, teamAId: 168, teamBId: 149, winnerId: 149 },
+    { id: 1340, time: "2025-10-31T17:20:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  6, scoreB:  2, pouleId: 154, teamAId: 155, teamBId: 180, winnerId: 155 },
+    { id: 1341, time: "2025-10-31T17:40:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA: 10, scoreB:  0, pouleId: 153, teamAId: 167, teamBId: 181, winnerId: 167 },
+    { id: 1342, time: "2025-10-31T18:00:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  5, pouleId: 154, teamAId: 188, teamBId: 178, winnerId: 178 },
+    { id: 1343, time: "2025-10-31T18:20:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  8, scoreB:  4, pouleId: 153, teamAId: 168, teamBId: 181, winnerId: 168 },
+    { id: 1344, time: "2025-10-31T18:40:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB: 11, pouleId: 154, teamAId: 155, teamBId: 178, winnerId: 178 },
+    { id: 1345, time: "2025-10-31T19:00:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  8, pouleId: 153, teamAId: 167, teamBId: 149, winnerId: 149 },
+    { id: 1346, time: "2025-10-31T19:20:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  8, scoreB:  6, pouleId: 154, teamAId: 188, teamBId: 180, winnerId: 188 },
+    { id: 1347, time: "2025-10-31T19:40:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA: 10, scoreB:  0, pouleId: 153, teamAId: 168, teamBId: 167, winnerId: 168 },
+    { id: 1348, time: "2025-10-31T20:00:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB:  7, pouleId: 154, teamAId: 155, teamBId: 188, winnerId: 188 },
+    { id: 1349, time: "2025-10-31T20:20:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  7, pouleId: 153, teamAId: 149, teamBId: 181, winnerId: 181 },
+    { id: 1350, time: "2025-10-31T20:40:00", track: 5, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  5, pouleId: 154, teamAId: 180, teamBId: 178, winnerId: null },
+    // Track 6 – Poule K & L
+    { id: 1351, time: "2025-10-31T17:00:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB:  8, pouleId: 155, teamAId: 176, teamBId: 151, winnerId: 151 },
+    { id: 1352, time: "2025-10-31T17:20:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  6, pouleId: 156, teamAId: 171, teamBId: 172, winnerId: 172 },
+    { id: 1353, time: "2025-10-31T17:40:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  1, scoreB: 12, pouleId: 155, teamAId: 179, teamBId: 148, winnerId: 148 },
+    { id: 1354, time: "2025-10-31T18:00:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  0, scoreB: 10, pouleId: 156, teamAId: 190, teamBId: 173, winnerId: 173 },
+    { id: 1355, time: "2025-10-31T18:20:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  9, pouleId: 155, teamAId: 176, teamBId: 148, winnerId: 148 },
+    { id: 1356, time: "2025-10-31T18:40:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB: 16, pouleId: 156, teamAId: 171, teamBId: 173, winnerId: 173 },
+    { id: 1357, time: "2025-10-31T19:00:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  6, scoreB:  5, pouleId: 155, teamAId: 179, teamBId: 151, winnerId: 179 },
+    { id: 1358, time: "2025-10-31T19:20:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  4, scoreB:  1, pouleId: 156, teamAId: 190, teamBId: 172, winnerId: 190 },
+    { id: 1359, time: "2025-10-31T19:40:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  2, scoreB:  8, pouleId: 155, teamAId: 176, teamBId: 179, winnerId: 179 },
+    { id: 1360, time: "2025-10-31T20:00:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  5, scoreB:  5, pouleId: 156, teamAId: 171, teamBId: 190, winnerId: null },
+    { id: 1361, time: "2025-10-31T20:20:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  8, scoreB:  7, pouleId: 155, teamAId: 151, teamBId: 148, winnerId: 151 },
+    { id: 1362, time: "2025-10-31T20:40:00", track: 6, phase: Phase.GROUP, bracketPos: null, scoreA:  3, scoreB:  8, pouleId: 156, teamAId: 172, teamBId: 173, winnerId: 173 },
+    // ── R16 ───────────────────────────────────────────────────────────────────
+    { id: 1363, time: "2025-10-31T21:20:00", track: 1, phase: Phase.R16, bracketPos: "Roos-R16-1",  scoreA:  2, scoreB:  7, pouleId: null, teamAId: 173, teamBId: 160, winnerId: 160 },
+    { id: 1364, time: "2025-10-31T21:20:00", track: 2, phase: Phase.R16, bracketPos: "Roos-R16-2",  scoreA:  6, scoreB:  7, pouleId: null, teamAId: 174, teamBId: 158, winnerId: 158 },
+    { id: 1365, time: "2025-10-31T21:20:00", track: 3, phase: Phase.R16, bracketPos: "Roos-R16-3",  scoreA:  7, scoreB:  0, pouleId: null, teamAId: 154, teamBId: 164, winnerId: 154 },
+    { id: 1366, time: "2025-10-31T21:20:00", track: 4, phase: Phase.R16, bracketPos: "Roos-R16-4",  scoreA: 13, scoreB:  0, pouleId: null, teamAId: 152, teamBId: 188, winnerId: 152 },
+    { id: 1367, time: "2025-10-31T21:20:00", track: 5, phase: Phase.R16, bracketPos: "Groen-R16-1", scoreA:  2, scoreB:  9, pouleId: null, teamAId: 165, teamBId: 167, winnerId: 167 },
+    { id: 1368, time: "2025-10-31T21:20:00", track: 6, phase: Phase.R16, bracketPos: "Groen-R16-2", scoreA:  8, scoreB:  5, pouleId: null, teamAId: 175, teamBId: 166, winnerId: 175 },
+    { id: 1369, time: "2025-10-31T21:40:00", track: 1, phase: Phase.R16, bracketPos: "Groen-R16-3", scoreA: 13, scoreB:  1, pouleId: null, teamAId: 178, teamBId: 192, winnerId: 178 },
+    { id: 1370, time: "2025-10-31T21:40:00", track: 2, phase: Phase.R16, bracketPos: "Groen-R16-4", scoreA: 11, scoreB:  2, pouleId: null, teamAId: 150, teamBId: 170, winnerId: 150 },
+    { id: 1371, time: "2025-10-31T21:40:00", track: 3, phase: Phase.R16, bracketPos: "Oranje-R16-1",scoreA:  2, scoreB:  6, pouleId: null, teamAId: 169, teamBId: 186, winnerId: 186 },
+    { id: 1372, time: "2025-10-31T21:40:00", track: 4, phase: Phase.R16, bracketPos: "Oranje-R16-2",scoreA:  6, scoreB:  2, pouleId: null, teamAId: 168, teamBId: 190, winnerId: 168 },
+    { id: 1373, time: "2025-10-31T21:40:00", track: 5, phase: Phase.R16, bracketPos: "Oranje-R16-3",scoreA:  3, scoreB:  4, pouleId: null, teamAId: 187, teamBId: 156, winnerId: 156 },
+    { id: 1374, time: "2025-10-31T21:40:00", track: 6, phase: Phase.R16, bracketPos: "Oranje-R16-4",scoreA:  4, scoreB:  8, pouleId: null, teamAId: 163, teamBId: 149, winnerId: 149 },
+    { id: 1375, time: "2025-10-31T22:00:00", track: 1, phase: Phase.R16, bracketPos: "Blauw-R16-1", scoreA:  5, scoreB:  4, pouleId: null, teamAId: 157, teamBId: 183, winnerId: 157 },
+    { id: 1376, time: "2025-10-31T22:00:00", track: 2, phase: Phase.R16, bracketPos: "Blauw-R16-2", scoreA:  5, scoreB:  3, pouleId: null, teamAId: 177, teamBId: 159, winnerId: 177 },
+    { id: 1377, time: "2025-10-31T22:00:00", track: 3, phase: Phase.R16, bracketPos: "Blauw-R16-3", scoreA:  9, scoreB:  0, pouleId: null, teamAId: 148, teamBId: 179, winnerId: 148 },
+    { id: 1378, time: "2025-10-31T22:00:00", track: 4, phase: Phase.R16, bracketPos: "Blauw-R16-4", scoreA:  5, scoreB:  2, pouleId: null, teamAId: 151, teamBId: 189, winnerId: 151 },
+    // ── R8 ────────────────────────────────────────────────────────────────────
+    { id: 1379, time: "2025-10-31T22:20:00", track: 1, phase: Phase.R8, bracketPos: "Roos-R8-1",   scoreA:  0, scoreB: 10, pouleId: null, teamAId: 160, teamBId: 158, winnerId: 158 },
+    { id: 1380, time: "2025-10-31T22:20:00", track: 2, phase: Phase.R8, bracketPos: "Roos-R8-2",   scoreA: 11, scoreB:  6, pouleId: null, teamAId: 154, teamBId: 152, winnerId: 154 },
+    { id: 1381, time: "2025-10-31T22:20:00", track: 3, phase: Phase.R8, bracketPos: "Groen-R8-1",  scoreA:  4, scoreB: 12, pouleId: null, teamAId: 167, teamBId: 175, winnerId: 175 },
+    { id: 1382, time: "2025-10-31T22:20:00", track: 4, phase: Phase.R8, bracketPos: "Groen-R8-2",  scoreA:  2, scoreB:  5, pouleId: null, teamAId: 178, teamBId: 150, winnerId: 150 },
+    { id: 1383, time: "2025-10-31T22:20:00", track: 5, phase: Phase.R8, bracketPos: "Oranje-R8-1", scoreA:  2, scoreB:  8, pouleId: null, teamAId: 186, teamBId: 168, winnerId: 168 },
+    { id: 1384, time: "2025-10-31T22:20:00", track: 6, phase: Phase.R8, bracketPos: "Oranje-R8-2", scoreA:  7, scoreB:  0, pouleId: null, teamAId: 156, teamBId: 149, winnerId: 156 },
+    { id: 1385, time: "2025-10-31T22:40:00", track: 1, phase: Phase.R8, bracketPos: "Blauw-R8-1",  scoreA: 12, scoreB:  2, pouleId: null, teamAId: 157, teamBId: 177, winnerId: 157 },
+    { id: 1386, time: "2025-10-31T22:40:00", track: 2, phase: Phase.R8, bracketPos: "Blauw-R8-2",  scoreA:  6, scoreB:  3, pouleId: null, teamAId: 148, teamBId: 151, winnerId: 148 },
+    // ── Kwartfinales ──────────────────────────────────────────────────────────
+    { id: 1387, time: "2025-10-31T23:00:00", track: 1, phase: Phase.QUARTER, bracketPos: "Roos-QUARTER-1",  scoreA: 1, scoreB: 7, pouleId: null, teamAId: 158, teamBId: 154, winnerId: 154 },
+    { id: 1388, time: "2025-10-31T23:00:00", track: 2, phase: Phase.QUARTER, bracketPos: "Groen-QUARTER-1", scoreA: 5, scoreB: 8, pouleId: null, teamAId: 175, teamBId: 150, winnerId: 150 },
+    { id: 1389, time: "2025-10-31T23:00:00", track: 3, phase: Phase.QUARTER, bracketPos: "Oranje-QUARTER-1",scoreA: 4, scoreB: 3, pouleId: null, teamAId: 168, teamBId: 156, winnerId: 168 },
+    { id: 1390, time: "2025-10-31T23:00:00", track: 4, phase: Phase.QUARTER, bracketPos: "Blauw-QUARTER-1", scoreA: 6, scoreB: 3, pouleId: null, teamAId: 157, teamBId: 148, winnerId: 157 },
+    // ── Halve finales ─────────────────────────────────────────────────────────
+    { id: 1391, time: "2025-10-31T23:30:00", track: 1, phase: Phase.SEMI, bracketPos: "ROOS_GROEN-SEMI",   scoreA:  1, scoreB: 10, pouleId: null, teamAId: 154, teamBId: 150, winnerId: 150 },
+    { id: 1392, time: "2025-10-31T23:30:00", track: 2, phase: Phase.SEMI, bracketPos: "ORANJE_BLAUW-SEMI", scoreA:  6, scoreB:  2, pouleId: null, teamAId: 168, teamBId: 157, winnerId: 168 },
+    // ── Finale & troostfinale ─────────────────────────────────────────────────
+    { id: 1393, time: "2025-10-31T00:00:00", track: 2, phase: Phase.FINAL,             bracketPos: "2-FINAL-1",              scoreA: 7,  scoreB: 1, pouleId: null, teamAId: 150, teamBId: 168, winnerId: 150 },
+    { id: 1394, time: "2025-11-01T00:00:00", track: 5, phase: Phase.CONSOLATION_FINAL, bracketPos: "1-CONSOLATION_FINAL-2", scoreA: 11, scoreB: 6, pouleId: null, teamAId: 154, teamBId: 157, winnerId: 154 },
   ];
 
-  for (const m of matchesData) {
+  for (const m of m25) {
     await prisma.match.upsert({
       where: { id: m.id },
       update: {},
       create: {
-        tournamentId: tournament.id,
-        pouleId:   m.pouleId,
-        teamAId:   m.teamAId,
-        teamBId:   m.teamBId,
-        scoreA:    m.scoreA,
-        scoreB:    m.scoreB,
-        winnerId:  m.winnerId,
-        time:      m.time,
-        track:     m.track,
-        phase:     m.phase,
-        bracketPos: m.bracketPos,
+        id: m.id, tournamentId: t25.id, pouleId: m.pouleId,
+        teamAId: m.teamAId, teamBId: m.teamBId, winnerId: m.winnerId,
+        scoreA: m.scoreA, scoreB: m.scoreB,
+        time: new Date(m.time), track: m.track, phase: m.phase, bracketPos: m.bracketPos,
       },
     });
   }
 
-  console.log("  ✔  Matches");
+  console.log("  ✔  Wedstrijden 2025");
 
-  // ── Team standings (groepsfase) ────────────────────────────────────────────
-  //
-  // Berekend op basis van de 3 groepswedstrijden per team.
-  // Knock-out matchen worden niet meegeteld in de standing.
+  const tb25 = await prisma.tiebreaker.upsert({
+    where: { tournamentId: t25.id },
+    update: { winnerId: 152 },
+    create: { tournamentId: t25.id, winnerId: 152 },
+  });
+  await prisma.tiebreakTeam.upsert({
+    where: { tiebreakId_teamId: { tiebreakId: tb25.id, teamId: 152 } },
+    update: { score: 2 },
+    create: { tiebreakId: tb25.id, teamId: 152, score: 2 },
+  });
+  await prisma.tiebreakTeam.upsert({
+    where: { tiebreakId_teamId: { tiebreakId: tb25.id, teamId: 188 } },
+    update: { score: 1 },
+    create: { tiebreakId: tb25.id, teamId: 188, score: 1 },
+  });
 
-  const standings = [
-    // id  played won drawn lost  gf  ga  saldo pts
-    {  id: 1, played: 3, won: 3, drawn: 0, lost: 0, goalsFor:  9, goalsAgainst: 2, saldo:  7, points: 9 },
-    {  id: 2, played: 3, won: 1, drawn: 0, lost: 2, goalsFor:  3, goalsAgainst: 5, saldo: -2, points: 3 },
-    {  id: 3, played: 3, won: 1, drawn: 1, lost: 1, goalsFor:  4, goalsAgainst: 5, saldo: -1, points: 4 },
-    {  id: 4, played: 3, won: 0, drawn: 1, lost: 2, goalsFor:  3, goalsAgainst: 7, saldo: -4, points: 1 },
-    {  id: 5, played: 3, won: 1, drawn: 1, lost: 1, goalsFor:  3, goalsAgainst: 3, saldo:  0, points: 4 },
-    {  id: 6, played: 3, won: 2, drawn: 0, lost: 1, goalsFor:  4, goalsAgainst: 2, saldo:  2, points: 6 },
-    {  id: 7, played: 3, won: 2, drawn: 1, lost: 0, goalsFor:  6, goalsAgainst: 4, saldo:  2, points: 7 },
-    {  id: 8, played: 3, won: 0, drawn: 0, lost: 3, goalsFor:  3, goalsAgainst: 7, saldo: -4, points: 0 },
-  ];
+  console.log("  ✔  Tiebreaker 2025");
 
-  for (const s of standings) {
-    await prisma.team.update({
-      where: { id: s.id },
-      data: {
-        played:       s.played,
-        won:          s.won,
-        drawn:        s.drawn,
-        lost:         s.lost,
-        goalsFor:     s.goalsFor,
-        goalsAgainst: s.goalsAgainst,
-        saldo:        s.saldo,
-        points:       s.points,
-        isPresent:    true,
-      },
-    });
-  }
-
-  console.log("  ✔  Team standings");
+  // Reset sequences so auto-increment works correctly after explicit IDs
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"Tournament"', 'id'), GREATEST((SELECT MAX(id) FROM "Tournament"), 1))`;
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"Poule"', 'id'),      GREATEST((SELECT MAX(id) FROM "Poule"),      1))`;
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"Team"', 'id'),       GREATEST((SELECT MAX(id) FROM "Team"),       1))`;
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('"Match"', 'id'),      GREATEST((SELECT MAX(id) FROM "Match"),      1))`;
 
   console.log("\n✅  Seed voltooid!");
-  console.log("\n   Admin login:");
-  console.log("   E-mail:    admin@deflosj.be");
-  console.log("   Wachtwoord: Password123!\n");
+  console.log("\n   Admin logins (wachtwoord voor iedereen: Password123!):");
+  console.log("   wannes.persyn@deflosj.be");
+  console.log("   arne.vandepoel@deflosj.be");
+  console.log("   gert.verbiern@deflosj.be");
+  console.log("   jannes.devesse@deflosj.be");
+  console.log("   joppe.vanloye@deflosj.be");
+  console.log("   liselot.persyn@deflosj.be");
+  console.log("   michiel.janssens@deflosj.be");
+  console.log("   pieter.david@deflosj.be");
+  console.log("   roel.debecker@deflosj.be\n");
 }
 
 main()

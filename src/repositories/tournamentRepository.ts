@@ -6,6 +6,10 @@ import prisma from "../database/prisma";
 export interface TournamentData {
   name: string;
   year: number;
+  teamsPerPoule?: number | null;
+  teamsAdvancingPerPoule?: number | null;
+  bestNthsAdvancing?: number | null;
+  status?: "UPCOMING" | "ONGOING" | "COMPLETED";
 }
 
 export const findAllTournaments = (): Promise<Tournament[]> =>
@@ -34,8 +38,8 @@ export const deleteTournament = (id: number): Promise<Tournament> =>
 
 export const activateTournament = (id: number): Promise<Tournament> =>
   prisma.$transaction(async (tx) => {
-    await tx.tournament.updateMany({ where: { isActive: true }, data: { isActive: false } });
-    return tx.tournament.update({ where: { id }, data: { isActive: true } });
+    await tx.tournament.updateMany({ where: { isActive: true }, data: { isActive: false, status: "COMPLETED" } });
+    return tx.tournament.update({ where: { id }, data: { isActive: true, status: "ONGOING" } });
   });
 
 // ── Rules ─────────────────────────────────────────────────────────────────────
@@ -258,4 +262,43 @@ export const setTiebreakerScore = (tiebreakId: number, teamId: number, score: nu
   prisma.tiebreakTeam.update({
     where: { tiebreakId_teamId: { tiebreakId, teamId } },
     data: { score },
+  });
+
+// ── Match generation helpers ───────────────────────────────────────────────────
+
+export const findPoulesWithTeams = (tournamentId: number) =>
+  prisma.poule.findMany({
+    where: { tournamentId, phase: "GROUP" },
+    include: { teams: { orderBy: { id: "asc" } } },
+    orderBy: { name: "asc" },
+  });
+
+export const deleteGroupMatchesByTournament = (tournamentId: number) =>
+  prisma.match.deleteMany({ where: { tournamentId, phase: "GROUP" } });
+
+export const bulkCreateMatches = (matches: Array<{ tournamentId: number; pouleId: number | null; teamAId: number | null; teamBId: number | null; time: Date; track: number | null; phase: Phase; bracketPos: string | null }>) =>
+  prisma.match.createMany({ data: matches });
+
+// ── Delay ────────────────────────────────────────────────────────────────────
+
+export const shiftFutureMatchTimes = async (tournamentId: number, minutes: number): Promise<number> => {
+  const result = await prisma.$executeRaw`
+    UPDATE "Match"
+    SET time = time + (${minutes} * INTERVAL '1 minute')
+    WHERE "tournamentId" = ${tournamentId}
+  `;
+  return result;
+};
+
+// ── Standings ────────────────────────────────────────────────────────────────
+
+export const findTeamsByPoule = (pouleId: number): Promise<Team[]> =>
+  prisma.team.findMany({
+    where: { pouleId },
+    orderBy: [{ points: "desc" }, { saldo: "desc" }, { goalsFor: "desc" }, { name: "asc" }],
+  });
+
+export const deleteKnockoutMatches = (tournamentId: number) =>
+  prisma.match.deleteMany({
+    where: { tournamentId, phase: { not: "GROUP" } },
   });
