@@ -250,3 +250,38 @@ model ContactMessage {
   createdAt DateTime   @default(now())
   readAt    DateTime?
 }
+
+enum RaceCategory {
+  DORPELINGENKOERS
+  FUN_WEDSTRIJD
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Registration {
+  id                     Int                @id @default(autoincrement())
+  timestamp              DateTime           @default(now())
+  firstName              String
+  lastName               String
+  dateOfBirth            String?
+  gender                 String
+  address                String
+  nationalRegisterNumber String
+  email                  String
+  phone                  String
+  wielerclub             String?
+  raceCategory           RaceCategory
+  status                 RegistrationStatus @default(PENDING)
+}
+
+model RegistrationSettings {
+  id                    Int      @id
+  isOpen                Boolean  @default(true)
+  dorpelingenkoersLimit Int?
+  funWedstrijdLimit     Int?
+  updatedAt             DateTime @updatedAt
+}
