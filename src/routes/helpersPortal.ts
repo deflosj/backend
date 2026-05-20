@@ -3,7 +3,7 @@ import { requireAuth } from "../middleware/auth";
 import { RSVPStatus, TaskStatus, Shift } from "@prisma/client";
 import * as repo from "../repositories/helpersRepository";
 import { v4 as uuidv4 } from "uuid";
-
+ 
 const router = express.Router();
 
 // ── Public invite token lookup ─────────────────────────────────────────────
