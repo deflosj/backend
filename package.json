@@ -2,7 +2,7 @@
   "name": "vzw-backend",
   "version": "0.1.0",
   "description": "Backend for VZW (Belgian non-profit organization) management system",
-  "main": "dist/index.js",
+  "main": "index.js",
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
