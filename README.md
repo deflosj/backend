@@ -56,6 +56,12 @@ npm run build
 ```
 Compiles TypeScript to JavaScript in the `dist/` directory.
 
+### Deploy
+```bash
+npm run deploy
+```
+Runs Prisma generation, applies pending Prisma migrations, builds the app, and seeds the database in one deploy-oriented command.
+
 ### Production
 ```bash
 npm run build
