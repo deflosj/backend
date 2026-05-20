@@ -12,6 +12,7 @@ enum UserRole {
   CAPTAIN
   REFEREE
   ADMIN
+  SUPERADMIN
 }
 
 // New enums for helper portal
@@ -75,6 +76,7 @@ model User {
   Task              Task[]
   InviteToken       InviteToken[]
   Attendance        Attendance[]
+  TaskAssignee      TaskAssignee[]
 }
 
 // New role model to allow multiple roles per user
@@ -98,23 +100,42 @@ model UserRoleRel {
 
 // Tasks for event shifts
 model Task {
-  id           Int        @id @default(autoincrement())
+  id           Int            @id @default(autoincrement())
   eventId      Int
   title        String
   description  String?
   shift        Shift
   assignedToId Int?
+  maxHelpers   Int?
   startAt      DateTime?
   endAt        DateTime?
-  status       TaskStatus @default(OPEN)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  status       TaskStatus     @default(OPEN)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
-  event      Event @relation(fields: [eventId], references: [id])
-  assignedTo User? @relation(fields: [assignedToId], references: [id])
+  event      Event          @relation(fields: [eventId], references: [id])
+  assignedTo User?          @relation(fields: [assignedToId], references: [id])
+  assignees  TaskAssignee[]
 
   @@index([eventId])
   @@index([assignedToId])
+}
+
+// Multiple helpers per task (self-signup via invite link)
+model TaskAssignee {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  userId    Int?
+  name      String
+  email     String?
+  createdAt DateTime @default(now())
+
+  task Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@unique([taskId, email])
+  @@index([taskId])
+  @@index([userId])
 }
 
 // Invite tokens which are valid until the event ends

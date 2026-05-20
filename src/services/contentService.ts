@@ -5,6 +5,7 @@ import {
   createNewsPost,
   createSponsor,
   findActiveSponsors,
+  findAllEvents,
   findEventById,
   findNewsPostById,
   findPublishedEvents,
@@ -109,6 +110,10 @@ export const editNews = async (id: number, input: Partial<NewsPostInput>) => {
 };
 
 export const listEvents = async () => findPublishedEvents();
+
+export const listAllEvents = async () => findAllEvents();
+
+export const getEvent = async (id: number) => getEventByIdOrThrow(id);
 
 export const createNewEvent = async (input: EventInput) => {
   const title = ensureValue(input.title, "Title is required");

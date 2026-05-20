@@ -104,6 +104,9 @@ export const findPublishedEvents = async (): Promise<Event[]> => {
   });
 };
 
+export const findAllEvents = async (): Promise<Event[]> =>
+  prisma.event.findMany({ orderBy: { startsAt: "asc" } });
+
 export const findEventById = async (id: number): Promise<Event | null> => {
   return prisma.event.findUnique({
     where: {
