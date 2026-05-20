@@ -54,7 +54,7 @@ Starts the development server with hot reload using nodemon.
 ```bash
 npm run build
 ```
-Compiles TypeScript to JavaScript in the `dist/` directory.
+Compiles TypeScript to JavaScript in the `dist/` directory locally. On Vercel, the same command also runs Prisma generation, applies migrations, and seeds the database.
 
 ### Deploy
 ```bash
