@@ -10,7 +10,27 @@ datasource db {
 enum UserRole {
   MEMBER
   CAPTAIN
+  REFEREE
   ADMIN
+}
+
+// New enums for helper portal
+enum Shift {
+  SETUP
+  DURING
+  BREAKDOWN
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum RSVPStatus {
+  NO_RESPONSE
+  YES
+  NO
 }
 
 enum SponsorTier {
@@ -37,20 +57,96 @@ enum MsgStatus {
 }
 
 model User {
-  id                Int              @id @default(autoincrement())
-  email             String           @unique
-  username          String           @unique
+  id                Int            @id @default(autoincrement())
+  email             String         @unique
+  username          String         @unique
   password          String
-  role              UserRole         @default(MEMBER)
+  role              UserRole       @default(MEMBER)
   avatarUrl         String?
-  isActive          Boolean          @default(true)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
   refreshTokens     RefreshToken[]
-  authoredNewsPosts NewsPost[]       @relation("NewsPostAuthor")
-  createdEvents     Event[]          @relation("EventCreatedBy")
+  authoredNewsPosts NewsPost[]     @relation("NewsPostAuthor")
+  createdEvents     Event[]        @relation("EventCreatedBy")
   memberProfile     MemberProfile?
-  captainedTeams    Team[]           @relation("TeamCaptain")
+  captainedTeams    Team[]         @relation("TeamCaptain")
+  UserRoleRel       UserRoleRel[]
+  Task              Task[]
+  InviteToken       InviteToken[]
+  Attendance        Attendance[]
+}
+
+// New role model to allow multiple roles per user
+model Role {
+  id    Int           @id @default(autoincrement())
+  name  String        @unique
+  users UserRoleRel[]
+}
+
+model UserRoleRel {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  roleId Int
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+// Tasks for event shifts
+model Task {
+  id           Int        @id @default(autoincrement())
+  eventId      Int
+  title        String
+  description  String?
+  shift        Shift
+  assignedToId Int?
+  startAt      DateTime?
+  endAt        DateTime?
+  status       TaskStatus @default(OPEN)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  event      Event @relation(fields: [eventId], references: [id])
+  assignedTo User? @relation(fields: [assignedToId], references: [id])
+
+  @@index([eventId])
+  @@index([assignedToId])
+}
+
+// Invite tokens which are valid until the event ends
+model InviteToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  eventId   Int
+  createdAt DateTime @default(now())
+  createdBy Int?
+
+  event   Event @relation(fields: [eventId], references: [id])
+  creator User? @relation(fields: [createdBy], references: [id])
+
+  @@index([eventId])
+}
+
+// Attendance / RSVP list
+model Attendance {
+  id        Int        @id @default(autoincrement())
+  eventId   Int
+  userId    Int?
+  name      String
+  email     String?
+  status    RSVPStatus @default(NO_RESPONSE)
+  createdAt DateTime   @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+  user  User? @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, email])
+  @@index([eventId])
+  @@index([userId])
 }
 
 model RefreshToken {
@@ -65,32 +161,35 @@ model RefreshToken {
 }
 
 model NewsPost {
-  id           Int      @id @default(autoincrement())
-  authorId     Int
-  title        String
-  slug         String   @unique
-  body         String
-  coverUrl     String?
-  publishedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  author       User     @relation("NewsPostAuthor", fields: [authorId], references: [id])
+  id          Int       @id @default(autoincrement())
+  authorId    Int
+  title       String
+  slug        String    @unique
+  body        String
+  coverUrl    String?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  author      User      @relation("NewsPostAuthor", fields: [authorId], references: [id])
 
   @@index([authorId])
 }
 
 model Event {
-  id           Int      @id @default(autoincrement())
-  createdById  Int
-  title        String
-  description  String?
-  location     String?
-  startsAt     DateTime
-  endsAt       DateTime?
-  isPublished  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  createdBy    User     @relation("EventCreatedBy", fields: [createdById], references: [id])
+  id          Int           @id @default(autoincrement())
+  createdById Int
+  title       String
+  description String?
+  location    String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  isPublished Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  createdBy   User          @relation("EventCreatedBy", fields: [createdById], references: [id])
+  Task        Task[]
+  InviteToken InviteToken[]
+  Attendance  Attendance[]
 
   @@index([createdById])
 }
@@ -106,15 +205,15 @@ model Sponsor {
 }
 
 model MemberProfile {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @unique
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
   firstName String
   lastName  String
   phone     String?
   bio       String?
   joinedAt  DateTime?
-  isPublic  Boolean  @default(true)
-  user      User     @relation(fields: [userId], references: [id])
+  isPublic  Boolean   @default(true)
+  user      User      @relation(fields: [userId], references: [id])
 }
 
 model Tournament {
@@ -135,19 +234,19 @@ model Tournament {
 }
 
 model TournamentRules {
-  id            Int        @id @default(autoincrement())
-  tournamentId   Int       @unique
-  description   String
-  updatedAt     DateTime   @updatedAt
-  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+  id           Int        @id @default(autoincrement())
+  tournamentId Int        @unique
+  description  String
+  updatedAt    DateTime   @updatedAt
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
 }
 
 model Poule {
-  id           Int       @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   tournamentId Int
   name         String
   description  String?
-  phase        Phase     @default(GROUP)
+  phase        Phase      @default(GROUP)
   tournament   Tournament @relation(fields: [tournamentId], references: [id])
   teams        Team[]
   matches      Match[]
@@ -156,33 +255,33 @@ model Poule {
 }
 
 model Team {
-  id            Int          @id @default(autoincrement())
-  tournamentId  Int
-  captainId     Int?
-  pouleId       Int?
-  name          String
-  logoUrl       String?
-  isPresent     Boolean      @default(false)
-  speler1       String
-  speler2       String
-  speler3       String
-  speler4       String
-  captainName   String
-  played        Int          @default(0)
-  won           Int          @default(0)
-  drawn         Int          @default(0)
-  lost          Int          @default(0)
-  goalsFor      Int          @default(0)
-  goalsAgainst  Int          @default(0)
-  saldo         Int          @default(0)
-  points        Int          @default(0)
-  tournament    Tournament   @relation(fields: [tournamentId], references: [id])
-  captain       User?        @relation("TeamCaptain", fields: [captainId], references: [id])
-  poule         Poule?       @relation(fields: [pouleId], references: [id])
-  matchesAsTeamA Match[]     @relation("MatchTeamA")
-  matchesAsTeamB Match[]     @relation("MatchTeamB")
-  wonMatches    Match[]      @relation("MatchWinner")
-  tiebreakWins  Tiebreaker[] @relation("TiebreakerWinner")
+  id              Int            @id @default(autoincrement())
+  tournamentId    Int
+  captainId       Int?
+  pouleId         Int?
+  name            String
+  logoUrl         String?
+  isPresent       Boolean        @default(false)
+  speler1         String
+  speler2         String
+  speler3         String
+  speler4         String
+  captainName     String
+  played          Int            @default(0)
+  won             Int            @default(0)
+  drawn           Int            @default(0)
+  lost            Int            @default(0)
+  goalsFor        Int            @default(0)
+  goalsAgainst    Int            @default(0)
+  saldo           Int            @default(0)
+  points          Int            @default(0)
+  tournament      Tournament     @relation(fields: [tournamentId], references: [id])
+  captain         User?          @relation("TeamCaptain", fields: [captainId], references: [id])
+  poule           Poule?         @relation(fields: [pouleId], references: [id])
+  matchesAsTeamA  Match[]        @relation("MatchTeamA")
+  matchesAsTeamB  Match[]        @relation("MatchTeamB")
+  wonMatches      Match[]        @relation("MatchWinner")
+  tiebreakWins    Tiebreaker[]   @relation("TiebreakerWinner")
   tiebreakEntries TiebreakTeam[] @relation("TiebreakTeamTeam")
 
   @@index([tournamentId])
@@ -191,23 +290,23 @@ model Team {
 }
 
 model Match {
-  id           Int       @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   tournamentId Int
   pouleId      Int?
   teamAId      Int?
   teamBId      Int?
   winnerId     Int?
-  time         DateTime  @default(now())
+  time         DateTime   @default(now())
   track        Int?
-  phase        Phase     @default(GROUP)
-  bracketPos   String?   @unique
+  phase        Phase      @default(GROUP)
+  bracketPos   String?    @unique
   scoreA       Int?
   scoreB       Int?
   tournament   Tournament @relation(fields: [tournamentId], references: [id])
-  poule        Poule?    @relation(fields: [pouleId], references: [id])
-  teamA        Team?     @relation("MatchTeamA", fields: [teamAId], references: [id])
-  teamB        Team?     @relation("MatchTeamB", fields: [teamBId], references: [id])
-  winner       Team?     @relation("MatchWinner", fields: [winnerId], references: [id])
+  poule        Poule?     @relation(fields: [pouleId], references: [id])
+  teamA        Team?      @relation("MatchTeamA", fields: [teamAId], references: [id])
+  teamB        Team?      @relation("MatchTeamB", fields: [teamBId], references: [id])
+  winner       Team?      @relation("MatchWinner", fields: [winnerId], references: [id])
 
   @@index([tournamentId])
   @@index([pouleId])
@@ -218,22 +317,22 @@ model Match {
 
 model Tiebreaker {
   id           Int            @id @default(autoincrement())
-  tournamentId Int           @unique
+  tournamentId Int            @unique
   winnerId     Int?
-  tournament   Tournament    @relation(fields: [tournamentId], references: [id])
-  winner       Team?         @relation("TiebreakerWinner", fields: [winnerId], references: [id])
+  tournament   Tournament     @relation(fields: [tournamentId], references: [id])
+  winner       Team?          @relation("TiebreakerWinner", fields: [winnerId], references: [id])
   teams        TiebreakTeam[]
 
   @@index([winnerId])
 }
 
 model TiebreakTeam {
-  id          Int        @id @default(autoincrement())
-  tiebreakId  Int
-  teamId      Int
-  score       Int?
-  tiebreaker  Tiebreaker @relation(fields: [tiebreakId], references: [id])
-  team        Team       @relation("TiebreakTeamTeam", fields: [teamId], references: [id])
+  id         Int        @id @default(autoincrement())
+  tiebreakId Int
+  teamId     Int
+  score      Int?
+  tiebreaker Tiebreaker @relation(fields: [tiebreakId], references: [id])
+  team       Team       @relation("TiebreakTeamTeam", fields: [teamId], references: [id])
 
   @@unique([tiebreakId, teamId])
   @@index([tiebreakId])
@@ -241,13 +340,13 @@ model TiebreakTeam {
 }
 
 model ContactMessage {
-  id        Int        @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
   email     String
   subject   String?
   body      String
-  status    MsgStatus  @default(UNREAD)
-  createdAt DateTime   @default(now())
+  status    MsgStatus @default(UNREAD)
+  createdAt DateTime  @default(now())
   readAt    DateTime?
 }
 

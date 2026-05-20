@@ -4,8 +4,14 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+
 async function main(): Promise<void> {
   console.log("🌱  Seeding database…");
+
+  // Ensure helper/admin/superadmin roles exist (used by the helpers portal)
+  await prisma.role.upsert({ where: { name: "helper" }, update: {}, create: { name: "helper" } });
+  await prisma.role.upsert({ where: { name: "admin" }, update: {}, create: { name: "admin" } });
+  await prisma.role.upsert({ where: { name: "superadmin" }, update: {}, create: { name: "superadmin" } });
 
   // ── Users ──────────────────────────────────────────────────────────────────
 
@@ -115,6 +121,18 @@ async function main(): Promise<void> {
       username: "roel_debecker",
       password: passwordHash,
       role: UserRole.ADMIN,
+      isActive: true,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "referee@deflosj.be" },
+    update: {},
+    create: {
+      email: "referee@deflosj.be",
+      username: "referee",
+      password: passwordHash,
+      role: UserRole.REFEREE,
       isActive: true,
     },
   });
@@ -548,8 +566,8 @@ Wijzigingen ten opzichte van vorig jaar:
 
   const t25 = await prisma.tournament.upsert({
     where: { id: 2 },
-    update: { name: "De Flosj Toernooi 2025", year: 2025, status: "COMPLETED" },
-    create: { id: 2, name: "De Flosj Toernooi 2025", year: 2025, isActive: false, status: "COMPLETED", teamsPerPoule: 4, teamsAdvancingPerPoule: 2 },
+    update: { name: "Petanque Tornooi", year: 2025, status: "COMPLETED" },
+    create: { id: 2, name: "Petanque Tornooi", year: 2025, isActive: false, status: "COMPLETED", teamsPerPoule: 4, teamsAdvancingPerPoule: 2 },
   });
 
   for (const p of [

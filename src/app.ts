@@ -11,6 +11,7 @@ import membersRouter from "./routes/members";
 import contactRouter from "./routes/contact";
 import tournamentRouter from "./routes/tournament";
 import registrationsRouter from "./routes/registrations";
+import helpersPortalRouter from "./routes/helpersPortal";
 
 const logger = createLogger(config.logLevel);
 
@@ -50,6 +51,8 @@ export const createApp = (): Express => {
   app.use(`${config.apiPrefix}/tournaments`, tournamentRouter);
   app.use("/registrations", registrationsRouter);
   app.use(`${config.apiPrefix}/registrations`, registrationsRouter);
+  app.use("/events", helpersPortalRouter);
+  app.use(`${config.apiPrefix}/events`, helpersPortalRouter);
 
   // 404 handler
   app.use(notFoundHandler);

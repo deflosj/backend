@@ -39,6 +39,7 @@ import {
 
 const tournamentRouter = Router();
 const adminOnly = [requireAuth, requireRole("ADMIN")];
+const refereeOrAdmin = [requireAuth, requireRole("REFEREE", "ADMIN")];
 
 // ── Tournaments ───────────────────────────────────────────────────────────────
 
@@ -247,7 +248,7 @@ tournamentRouter.delete("/:id/teams/:teamId", ...adminOnly, async (req: Request,
   }
 });
 
-tournamentRouter.post("/:id/teams/:teamId/checkin", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.post("/:id/teams/:teamId/checkin", ...refereeOrAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await toggleCheckIn(Number(req.params.teamId), Boolean(req.body.isPresent)));
   } catch (e) {
@@ -320,7 +321,7 @@ tournamentRouter.delete("/:id/matches/:matchId", ...adminOnly, async (req: Reque
   }
 });
 
-tournamentRouter.post("/:id/matches/:matchId/score", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.post("/:id/matches/:matchId/score", ...refereeOrAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await recordScore(Number(req.params.matchId), Number(req.body.scoreA), Number(req.body.scoreB)));
   } catch (e) {
@@ -338,7 +339,7 @@ tournamentRouter.get("/:id/tiebreaker", async (req: Request, res: Response, next
   }
 });
 
-tournamentRouter.put("/:id/tiebreaker", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.put("/:id/tiebreaker", ...refereeOrAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await saveTiebreaker(Number(req.params.id), req.body.teamIds));
   } catch (e) {
@@ -346,7 +347,7 @@ tournamentRouter.put("/:id/tiebreaker", ...adminOnly, async (req: Request, res: 
   }
 });
 
-tournamentRouter.post("/:id/tiebreaker/winner", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.post("/:id/tiebreaker/winner", ...refereeOrAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await resolveTiebreakerWinner(Number(req.params.id), Number(req.body.winnerId)));
   } catch (e) {
@@ -354,7 +355,7 @@ tournamentRouter.post("/:id/tiebreaker/winner", ...adminOnly, async (req: Reques
   }
 });
 
-tournamentRouter.post("/:id/tiebreaker/score", ...adminOnly, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.post("/:id/tiebreaker/score", ...refereeOrAdmin, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await recordTiebreakerScore(Number(req.params.id), Number(req.body.teamId), Number(req.body.score)));
   } catch (e) {
