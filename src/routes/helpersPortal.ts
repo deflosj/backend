@@ -7,7 +7,6 @@ import { v4 as uuidv4 } from "uuid";
 const router = express.Router();
 
 // ── Public invite token lookup ─────────────────────────────────────────────
-// GET /events/portal/invite/:token
 router.get(
   "/portal/invite/:token",
   async (req: Request<{ token: string }>, res: Response, next: NextFunction) => {
@@ -23,7 +22,6 @@ router.get(
 );
 
 // ── Task stats ─────────────────────────────────────────────────────────────
-// GET /events/:id/portal/stats
 router.get(
   "/:id/portal/stats",
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
@@ -38,7 +36,6 @@ router.get(
 );
 
 // ── List tasks ─────────────────────────────────────────────────────────────
-// GET /events/:id/portal/tasks
 router.get(
   "/:id/portal/tasks",
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
@@ -53,41 +50,35 @@ router.get(
 );
 
 // ── Create task (admin) ────────────────────────────────────────────────────
-// POST /events/:id/portal/tasks
 router.post(
   "/:id/portal/tasks",
   requireAuth,
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
       const eventId = Number.parseInt(req.params.id, 10);
-      const { title, description, shift, startAt, endAt, assignEmail, assignName } = req.body as {
+      const { title, description, shift, startAt, endAt, maxHelpers } = req.body as {
         title?: string;
         description?: string;
         shift?: string;
         startAt?: string;
         endAt?: string;
-        assignEmail?: string;
-        assignName?: string;
+        maxHelpers?: number | null;
       };
       if (!title || !shift) return res.status(400).json({ error: "Titel en shift zijn verplicht" });
       if (!Object.values(Shift).includes(shift as Shift))
         return res.status(400).json({ error: "Ongeldige shift" });
 
-      const task = await repo.createTask(eventId, {
+      await repo.createTask(eventId, {
         title,
         description,
         shift: shift as Shift,
         startAt: startAt ? new Date(startAt) : undefined,
         endAt: endAt ? new Date(endAt) : undefined,
+        maxHelpers: maxHelpers ?? null,
       });
 
-      if (assignEmail) {
-        const user = await repo.findOrCreateUserByEmail(assignEmail, assignName);
-        if (user) await repo.assignTask(task.id, user.id);
-      }
-
       const full = await repo.listTasksByEvent(eventId);
-      return res.status(201).json(full.find((t) => t.id === task.id) ?? task);
+      return res.status(201).json(full);
     } catch (err) {
       return next(err);
     }
@@ -95,39 +86,30 @@ router.post(
 );
 
 // ── Update task (admin) ────────────────────────────────────────────────────
-// PATCH /events/:id/portal/tasks/:taskId
 router.patch(
   "/:id/portal/tasks/:taskId",
   requireAuth,
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
     try {
       const taskId = Number.parseInt(req.params.taskId, 10);
-      const { title, description, shift, startAt, endAt, assignEmail, assignName, status } =
-        req.body as Record<string, string | undefined>;
+      const { title, description, shift, startAt, endAt, status, maxHelpers } =
+        req.body as Record<string, string | number | null | undefined>;
 
       type TaskPatch = Parameters<typeof repo.updateTask>[1];
       const data: TaskPatch = {};
-      if (title !== undefined) data.title = title;
-      if (description !== undefined) data.description = description || null;
+      if (title !== undefined) data.title = title as string;
+      if (description !== undefined) data.description = (description as string) || null;
       if (shift !== undefined) data.shift = shift as Shift;
-      if (startAt !== undefined) data.startAt = startAt ? new Date(startAt) : null;
-      if (endAt !== undefined) data.endAt = endAt ? new Date(endAt) : null;
+      if (startAt !== undefined) data.startAt = startAt ? new Date(startAt as string) : null;
+      if (endAt !== undefined) data.endAt = endAt ? new Date(endAt as string) : null;
       if (status !== undefined) data.status = status as TaskStatus;
+      if (maxHelpers !== undefined) data.maxHelpers = maxHelpers !== null ? Number(maxHelpers) : null;
 
-      if (assignEmail !== undefined) {
-        if (assignEmail) {
-          const user = await repo.findOrCreateUserByEmail(assignEmail, assignName);
-          data.assignedToId = user?.id ?? null;
-        } else {
-          data.assignedToId = null;
-        }
-      }
-
-      await repo.updateTask(taskId, data);
+      await repo.updateTask(taskId, data); 
 
       const eventId = Number.parseInt(req.params.id, 10);
       const full = await repo.listTasksByEvent(eventId);
-      return res.json(full.find((t) => t.id === taskId));
+      return res.json(full);
     } catch (err) {
       return next(err);
     }
@@ -135,7 +117,6 @@ router.patch(
 );
 
 // ── Delete task (admin) ────────────────────────────────────────────────────
-// DELETE /events/:id/portal/tasks/:taskId
 router.delete(
   "/:id/portal/tasks/:taskId",
   requireAuth,
@@ -150,8 +131,24 @@ router.delete(
   }
 );
 
+// ── Remove a specific assignee from a task (admin) ────────────────────────
+router.delete(
+  "/:id/portal/tasks/:taskId/assignees/:assigneeId",
+  requireAuth,
+  async (req: Request<{ id: string; taskId: string; assigneeId: string }>, res: Response, next: NextFunction) => {
+    try {
+      const assigneeId = Number.parseInt(req.params.assigneeId, 10);
+      await repo.removeTaskAssigneeById(assigneeId);
+      const eventId = Number.parseInt(req.params.id, 10);
+      const full = await repo.listTasksByEvent(eventId);
+      return res.json(full);
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
 // ── Claim task (auth or invite token) ─────────────────────────────────────
-// POST /events/:id/portal/tasks/:taskId/claim
 router.post(
   "/:id/portal/tasks/:taskId/claim",
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
@@ -170,17 +167,37 @@ router.post(
       if (!userId && token) {
         const invite = await repo.findInviteToken(token);
         if (!invite) return res.status(401).json({ error: "Ongeldige uitnodigingslink" });
-        const user = await repo.findOrCreateUserByEmail(email ?? "", name);
-        userId = user?.id ?? null;
+      } else if (!userId) {
+        return res.status(401).json({ error: "Authenticatie of uitnodigingslink vereist" });
       }
 
-      if (!userId) return res.status(401).json({ error: "Authenticatie of uitnodigingslink vereist" });
+      if (!name?.trim()) return res.status(400).json({ error: "Naam is verplicht" });
 
       const taskId = Number.parseInt(req.params.taskId, 10);
       const task = await repo.findTaskById(taskId);
       if (!task) return res.status(404).json({ error: "Taak niet gevonden" });
 
-      await repo.assignTask(taskId, userId);
+      // Check capacity
+      if (task.maxHelpers !== null) {
+        const count = await repo.countTaskAssignees(taskId);
+        if (count >= task.maxHelpers) {
+          return res.status(409).json({ error: "Deze shift is al vol" });
+        }
+      }
+
+      // Resolve user by email if provided
+      let resolvedUserId = userId;
+      if (!resolvedUserId && email) {
+        const user = await repo.findOrCreateUserByEmail(email, name);
+        resolvedUserId = user?.id ?? null;
+      }
+
+      await repo.addTaskAssignee(taskId, {
+        userId: resolvedUserId,
+        name: name.trim(),
+        email: email?.trim() || undefined,
+      });
+
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -189,19 +206,14 @@ router.post(
 );
 
 // ── Unclaim task ───────────────────────────────────────────────────────────
-// POST /events/:id/portal/tasks/:taskId/unclaim
 router.post(
   "/:id/portal/tasks/:taskId/unclaim",
   requireAuth,
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
     try {
       const taskId = Number.parseInt(req.params.taskId, 10);
-      const task = await repo.findTaskById(taskId);
-      if (!task) return res.status(404).json({ error: "Taak niet gevonden" });
-      if (task.assignedToId && req.authUser && task.assignedToId !== req.authUser.id) {
-        return res.status(403).json({ error: "Niet toegestaan" });
-      }
-      await repo.assignTask(taskId, null);
+      const userId = req.authUser?.id;
+      if (userId) await repo.removeTaskAssigneeByUser(taskId, userId);
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -210,7 +222,6 @@ router.post(
 );
 
 // ── Toggle done ────────────────────────────────────────────────────────────
-// POST /events/:id/portal/tasks/:taskId/toggleDone
 router.post(
   "/:id/portal/tasks/:taskId/toggleDone",
   requireAuth,
@@ -219,9 +230,6 @@ router.post(
       const taskId = Number.parseInt(req.params.taskId, 10);
       const task = await repo.findTaskById(taskId);
       if (!task) return res.status(404).json({ error: "Taak niet gevonden" });
-      if (task.assignedToId && req.authUser && task.assignedToId !== req.authUser.id) {
-        return res.status(403).json({ error: "Niet toegestaan" });
-      }
       const newStatus: TaskStatus = task.status === TaskStatus.DONE ? TaskStatus.OPEN : TaskStatus.DONE;
       await repo.updateTaskStatus(taskId, newStatus);
       return res.json({ success: true });
@@ -232,7 +240,6 @@ router.post(
 );
 
 // ── Generate invite link (admin) ───────────────────────────────────────────
-// POST /events/:id/portal/invite
 router.post(
   "/:id/portal/invite",
   requireAuth,
@@ -249,7 +256,6 @@ router.post(
 );
 
 // ── List attendance (admin) ────────────────────────────────────────────────
-// GET /events/:id/portal/attendance
 router.get(
   "/:id/portal/attendance",
   requireAuth,
@@ -265,7 +271,6 @@ router.get(
 );
 
 // ── Update attendance RSVP (admin) ─────────────────────────────────────────
-// PATCH /events/:id/portal/attendance/:aid
 router.patch(
   "/:id/portal/attendance/:aid",
   requireAuth,
@@ -285,7 +290,6 @@ router.patch(
 );
 
 // ── Delete attendance (admin) ──────────────────────────────────────────────
-// DELETE /events/:id/portal/attendance/:aid
 router.delete(
   "/:id/portal/attendance/:aid",
   requireAuth,
@@ -301,7 +305,6 @@ router.delete(
 );
 
 // ── RSVP (public) ──────────────────────────────────────────────────────────
-// POST /events/:id/portal/rsvp
 router.post(
   "/:id/portal/rsvp",
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
@@ -331,7 +334,6 @@ router.post(
 );
 
 // ── Export CSV (admin) ─────────────────────────────────────────────────────
-// GET /events/:id/portal/export
 router.get(
   "/:id/portal/export",
   requireAuth,

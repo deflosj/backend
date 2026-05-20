@@ -10,7 +10,9 @@ import {
   editEvent,
   editSponsor,
   editNews,
+  getEvent,
   getNewsPost,
+  listAllEvents,
   listEvents,
   listNewsPosts,
   listSponsors,
@@ -110,6 +112,27 @@ contentRouter.patch(
 contentRouter.get("/events", async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await listEvents());
+  } catch (error) {
+    next(error);
+  }
+});
+
+contentRouter.get(
+  "/events/all",
+  requireAuth,
+  requireRole(UserRole.ADMIN),
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      res.json(await listAllEvents());
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+contentRouter.get("/events/:id", async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await getEvent(Number.parseInt(req.params.id, 10)));
   } catch (error) {
     next(error);
   }
