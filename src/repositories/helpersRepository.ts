@@ -32,7 +32,7 @@ export const updateTask = async (
     assignedToId: number | null;
     status: TaskStatus;
     maxHelpers: number | null;
-  }>
+  }>  
 ) => prisma.task.update({ where: { id: taskId }, data });
 
 export const deleteTask = async (taskId: number) => prisma.task.delete({ where: { id: taskId } });
