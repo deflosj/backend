@@ -1,7 +1,8 @@
-import { RegistrationStatus } from "@prisma/client";
+import { RaceCategory, Registration, RegistrationStatus } from "@prisma/client";
 import {
   listRegistrations,
   updateRegistrationStatus,
+  updateRaceCategory,
   removeRegistration,
   getRegistrationSettings,
   updateRegistrationSettings,
@@ -14,6 +15,9 @@ export const approveRegistration = async (id: number) =>
 
 export const rejectRegistration = async (id: number) =>
   updateRegistrationStatus(id, RegistrationStatus.REJECTED);
+
+export const changeRaceCategory = async (id: number, raceCategory: RaceCategory): Promise<Registration> =>
+  updateRaceCategory(id, raceCategory);
 
 export const deleteRegistration = async (id: number) => removeRegistration(id);
 

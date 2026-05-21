@@ -1,4 +1,4 @@
-import { Registration, RegistrationSettings, RegistrationStatus } from "@prisma/client";
+import { RaceCategory, Registration, RegistrationSettings, RegistrationStatus } from "@prisma/client";
 import prisma from "../database/prisma";
 
 export const listRegistrations = async (): Promise<Registration[]> => {
@@ -11,6 +11,10 @@ export const updateRegistrationStatus = async (id: number, status: RegistrationS
 
 export const removeRegistration = async (id: number): Promise<void> => {
   await prisma.registration.delete({ where: { id } });
+};
+
+export const updateRaceCategory = async (id: number, raceCategory: RaceCategory): Promise<Registration> => {
+  return prisma.registration.update({ where: { id }, data: { raceCategory } });
 };
 
 export const getRegistrationSettings = async (): Promise<RegistrationSettings> => {

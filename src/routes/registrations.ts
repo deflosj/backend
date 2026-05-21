@@ -1,11 +1,12 @@
 import { NextFunction, Request, Response, Router } from "express";
-import { UserRole } from "@prisma/client";
+import { RaceCategory, UserRole } from "@prisma/client";
 import { requireAuth } from "../middleware/auth";
 import { requireRole } from "../middleware/authorizeRole";
 import {
   getAllRegistrations,
   approveRegistration,
   rejectRegistration,
+  changeRaceCategory,
   deleteRegistration,
   fetchRegistrationSettings,
   saveRegistrationSettings,
@@ -78,6 +79,24 @@ registrationsRouter.patch(
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await rejectRegistration(Number.parseInt(req.params.id, 10)));
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+registrationsRouter.patch(
+  "/:id/category",
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { raceCategory } = req.body as { raceCategory: RaceCategory };
+      if (!Object.values(RaceCategory).includes(raceCategory)) {
+        res.status(400).json({ message: "Invalid raceCategory" });
+        return;
+      }
+      res.json(await changeRaceCategory(Number.parseInt(req.params.id, 10), raceCategory));
     } catch (error) {
       next(error);
     }
