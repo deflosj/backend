@@ -34,7 +34,7 @@ contactRouter.post(
 contactRouter.get(
   "/messages",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await listMessages());
@@ -47,7 +47,7 @@ contactRouter.get(
 contactRouter.patch(
   "/messages/:id/read",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await readMessage(Number.parseInt(req.params.id, 10)));
@@ -60,7 +60,7 @@ contactRouter.patch(
 contactRouter.patch(
   "/messages/:id/archive",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await archiveMessage(Number.parseInt(req.params.id, 10)));

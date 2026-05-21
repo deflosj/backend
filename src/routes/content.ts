@@ -65,7 +65,7 @@ contentRouter.get("/news/:slug", async (req: Request, res: Response, next: NextF
 contentRouter.post(
   "/news",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<unknown, unknown, NewsPostBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.authUser) {
@@ -91,7 +91,7 @@ contentRouter.post(
 contentRouter.patch(
   "/news/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }, unknown, NewsPostBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(
@@ -120,7 +120,7 @@ contentRouter.get("/events", async (_req: Request, res: Response, next: NextFunc
 contentRouter.get(
   "/events/all",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await listAllEvents());
@@ -141,7 +141,7 @@ contentRouter.get("/events/:id", async (req: Request<{ id: string }>, res: Respo
 contentRouter.post(
   "/events",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<unknown, unknown, EventBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.authUser) {
@@ -168,7 +168,7 @@ contentRouter.post(
 contentRouter.patch(
   "/events/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }, unknown, EventBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(
@@ -198,7 +198,7 @@ contentRouter.get("/sponsors", async (_req: Request, res: Response, next: NextFu
 contentRouter.post(
   "/sponsors",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<unknown, unknown, SponsorBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.status(201).json(
@@ -220,7 +220,7 @@ contentRouter.post(
 contentRouter.patch(
   "/sponsors/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }, unknown, SponsorBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(

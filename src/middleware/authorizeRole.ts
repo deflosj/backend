@@ -9,6 +9,8 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
       return;
     }
 
+    console.log("Authenticated user role:", req.authUser.role);
+    console.log("Allowed roles for this route:", allowedRoles);
     if (!allowedRoles.includes(req.authUser.role)) {
       next(new HttpError(403, "Insufficient permissions"));
       return;

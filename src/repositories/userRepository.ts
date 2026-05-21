@@ -1,10 +1,11 @@
-import { User } from "@prisma/client";
+import { User, UserRole } from "@prisma/client";
 import prisma from "../database/prisma";
 
 export interface CreateUserInput {
   email: string;
   username: string;
   password: string;
+  role?: UserRole;
 }
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
@@ -41,12 +42,13 @@ export const findUserByEmailOrUsernameValues = async (
   });
 };
 
-export const createUser = async ({ email, username, password }: CreateUserInput): Promise<User> => {
+export const createUser = async ({ email, username, password, role }: CreateUserInput): Promise<User> => {
   return prisma.user.create({
     data: {
       email: normalizeEmail(email),
       username: normalizeUsername(username),
       password,
+      ...(role ? { role } : {}),
     },
   });
 };

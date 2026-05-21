@@ -7,9 +7,18 @@ import {
   findUserByEmailOrUsernameValues,
   findUserById,
 } from "../repositories/userRepository";
+import { validateCode, consumeCode } from "../services/registrationCodeService";
 import config from "../config";
 
 jest.mock("../repositories/userRepository");
+jest.mock("../services/registrationCodeService");
+
+const registrationCodeMock = {
+  validateCode: validateCode as jest.Mock,
+  consumeCode: consumeCode as jest.Mock,
+};
+
+const VALID_CODE_RECORD = { id: 99, code: "TESTCODE", role: "MEMBER", isActive: true };
 
 const userRepositoryMock = {
   createUser: createUser as jest.Mock,
@@ -21,6 +30,8 @@ const userRepositoryMock = {
 describe("authService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    registrationCodeMock.validateCode.mockResolvedValue(VALID_CODE_RECORD);
+    registrationCodeMock.consumeCode.mockResolvedValue(undefined);
   });
 
   describe("registerUser", () => {
@@ -32,6 +43,7 @@ describe("authService", () => {
           email: "existing@example.com",
           username: "newuser",
           password: "password123",
+          inviteCode: "TESTCODE",
         })
       ).rejects.toMatchObject({
         statusCode: 409,
@@ -47,6 +59,7 @@ describe("authService", () => {
           email: "new@example.com",
           username: "existing",
           password: "password123",
+          inviteCode: "TESTCODE",
         })
       ).rejects.toMatchObject({ statusCode: 409 });
     });
@@ -70,6 +83,7 @@ describe("authService", () => {
         email: "new@example.com",
         username: "newuser",
         password: "password123",
+        inviteCode: "TESTCODE",
       });
 
       expect(result.user.email).toBe("new@example.com");
@@ -95,6 +109,7 @@ describe("authService", () => {
         email: "test@example.com",
         username: "testuser",
         password: "password123",
+        inviteCode: "TESTCODE",
       });
 
       const decoded = jwt.verify(result.token, config.jwtSecret) as any;

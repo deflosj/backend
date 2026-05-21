@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import { HttpError } from "../utils/httpError";
 import { requireAuth } from "../middleware/auth";
 import { getCurrentUser, loginUser, registerUser, AuthResult, PublicUser } from "../services/authService";
+import { validateCode } from "../services/registrationCodeService";
 
 const authRouter = Router();
 
@@ -9,6 +10,7 @@ interface RegisterBody {
   email?: string;
   username?: string;
   password?: string;
+  inviteCode?: string;
 }
 
 interface LoginBody {
@@ -25,9 +27,10 @@ authRouter.post(
       const email = req.body.email?.trim();
       const username = req.body.username?.trim();
       const password = req.body.password;
+      const inviteCode = req.body.inviteCode?.trim();
 
-      if (!email || !username || !password) {
-        throw new HttpError(400, "Email, username, and password are required");
+      if (!email || !username || !password || !inviteCode) {
+        throw new HttpError(400, "Email, username, password, and invite code are required");
       }
 
       if (password.length < 8) {
@@ -38,6 +41,7 @@ authRouter.post(
         email,
         username,
         password,
+        inviteCode,
       });
 
       res.status(201).json({
@@ -88,6 +92,18 @@ authRouter.get(
       const user = await getCurrentUser(req.authUser.id);
 
       res.json(user);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+authRouter.get(
+  "/validate-invite/:code",
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const record = await validateCode(req.params.code);
+      res.json({ valid: true, role: record.role });
     } catch (error) {
       next(error);
     }
