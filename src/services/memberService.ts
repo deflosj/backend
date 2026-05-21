@@ -5,6 +5,7 @@ import {
   upsertMemberProfile,
   MemberProfileData,
 } from "../repositories/memberRepository";
+import { findAllUsers } from "../repositories/userRepository";
 
 export const listMembers = async () => findPublicMemberProfiles();
 
@@ -32,3 +33,5 @@ export const saveMyProfile = async (userId: number, input: MemberProfileData) =>
     isPublic: input.isPublic ?? true,
   });
 };
+
+export const listAllUsers = async () => findAllUsers();

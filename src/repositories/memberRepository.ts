@@ -30,6 +30,10 @@ export const findPublicMemberProfiles = async (): Promise<MemberProfile[]> => {
 };
 
 export const findPublicMemberProfileById = async (id: number): Promise<MemberProfile | null> => {
+  if (!Number.isInteger(id) || id <= 0) {
+    return null;
+  }
+
   return prisma.memberProfile.findFirst({
     where: {
       id,

@@ -52,3 +52,32 @@ export const createUser = async ({ email, username, password, role }: CreateUser
     },
   });
 };
+
+export const findUsersByRoles = async (roles: UserRole[]): Promise<User[]> => {
+  return prisma.user.findMany({
+    where: {
+      role: { in: roles },
+    },
+    orderBy: { username: "asc" },
+  });
+};
+
+export const findAdmins = async (): Promise<User[]> => {
+  return findUsersByRoles([UserRole.ADMIN, UserRole.SUPERADMIN]);
+};
+
+export const findAllUsers = async (): Promise<Partial<User>[]> => {
+  return prisma.user.findMany({
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      role: true,
+      avatarUrl: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    orderBy: { username: "asc" },
+  });
+};

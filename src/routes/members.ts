@@ -1,7 +1,9 @@
 import { NextFunction, Request, Response, Router } from "express";
 import { requireAuth } from "../middleware/auth";
 import { HttpError } from "../utils/httpError";
-import { getMember, listMembers, saveMyProfile } from "../services/memberService";
+import { getMember, listMembers, saveMyProfile, listAllUsers } from "../services/memberService";
+import { requireRole } from "../middleware/authorizeRole";
+import { UserRole } from "@prisma/client";
 
 const membersRouter = Router();
 
@@ -22,9 +24,28 @@ membersRouter.get("/", async (_req: Request, res: Response, next: NextFunction):
   }
 });
 
+// Admin: list all users (for leden overview)
+membersRouter.get(
+  "/all",
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      res.json(await listAllUsers());
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 membersRouter.get("/:id", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json(await getMember(Number.parseInt(req.params.id, 10)));
+    const id = Number.parseInt(req.params.id, 10);
+    if (Number.isNaN(id) || id <= 0) {
+      throw new HttpError(400, "Invalid member id");
+    }
+
+    res.json(await getMember(id));
   } catch (error) {
     next(error);
   }
