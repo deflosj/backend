@@ -9,6 +9,7 @@ import {
   findUserByEmailOrUsernameValues,
   findUserById,
 } from "../repositories/userRepository";
+import { validateCode, consumeCode } from "./registrationCodeService";
 
 const saltRounds = 10;
 
@@ -16,6 +17,7 @@ export interface RegisterInput {
   email: string;
   username: string;
   password: string;
+  inviteCode: string;
 }
 
 export interface LoginInput {
@@ -64,9 +66,10 @@ const createToken = (user: User): string =>
     }
   );
 
-export const registerUser = async ({ email, username, password }: RegisterInput): Promise<AuthResult> => {
-  const existingUser = await findUserByEmailOrUsernameValues(email, username);
+export const registerUser = async ({ email, username, password, inviteCode }: RegisterInput): Promise<AuthResult> => {
+  const codeRecord = await validateCode(inviteCode);
 
+  const existingUser = await findUserByEmailOrUsernameValues(email, username);
   if (existingUser) {
     throw new HttpError(409, "A user with that email or username already exists");
   }
@@ -77,7 +80,10 @@ export const registerUser = async ({ email, username, password }: RegisterInput)
     email,
     username,
     password: hashedPassword,
+    role: codeRecord.role,
   });
+
+  await consumeCode(codeRecord.id);
 
   return {
     user: serializeUser(createdUser),

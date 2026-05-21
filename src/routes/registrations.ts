@@ -16,7 +16,7 @@ const registrationsRouter = Router();
 registrationsRouter.get(
   "/",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await getAllRegistrations());
@@ -30,7 +30,7 @@ registrationsRouter.get(
 registrationsRouter.get(
   "/settings",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await fetchRegistrationSettings());
@@ -43,7 +43,7 @@ registrationsRouter.get(
 registrationsRouter.patch(
   "/settings",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { isOpen, dorpelingenkoersLimit, funWedstrijdLimit } = req.body as {
@@ -61,7 +61,7 @@ registrationsRouter.patch(
 registrationsRouter.patch(
   "/:id/approve",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await approveRegistration(Number.parseInt(req.params.id, 10)));
@@ -74,7 +74,7 @@ registrationsRouter.patch(
 registrationsRouter.patch(
   "/:id/reject",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await rejectRegistration(Number.parseInt(req.params.id, 10)));
@@ -87,7 +87,7 @@ registrationsRouter.patch(
 registrationsRouter.delete(
   "/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN),
+  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       await deleteRegistration(Number.parseInt(req.params.id, 10));

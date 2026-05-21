@@ -58,25 +58,41 @@ enum MsgStatus {
 }
 
 model User {
-  id                Int            @id @default(autoincrement())
-  email             String         @unique
-  username          String         @unique
-  password          String
-  role              UserRole       @default(MEMBER)
-  avatarUrl         String?
-  isActive          Boolean        @default(true)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  refreshTokens     RefreshToken[]
-  authoredNewsPosts NewsPost[]     @relation("NewsPostAuthor")
-  createdEvents     Event[]        @relation("EventCreatedBy")
-  memberProfile     MemberProfile?
-  captainedTeams    Team[]         @relation("TeamCaptain")
-  UserRoleRel       UserRoleRel[]
-  Task              Task[]
-  InviteToken       InviteToken[]
-  Attendance        Attendance[]
-  TaskAssignee      TaskAssignee[]
+  id                 Int                 @id @default(autoincrement())
+  email              String              @unique
+  username           String              @unique
+  password           String
+  role               UserRole            @default(MEMBER)
+  avatarUrl          String?
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  refreshTokens      RefreshToken[]
+  authoredNewsPosts  NewsPost[]          @relation("NewsPostAuthor")
+  createdEvents      Event[]             @relation("EventCreatedBy")
+  memberProfile      MemberProfile?
+  captainedTeams     Team[]              @relation("TeamCaptain")
+  UserRoleRel        UserRoleRel[]
+  Task               Task[]
+  InviteToken        InviteToken[]
+  Attendance         Attendance[]
+  TaskAssignee       TaskAssignee[]
+  registrationCodes  RegistrationCode[]
+  shiftRegistrations ShiftRegistration[]
+}
+
+model RegistrationCode {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  role        UserRole
+  label       String?
+  isActive    Boolean  @default(true)
+  usedCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  createdById Int?
+  creator     User?    @relation(fields: [createdById], references: [id])
+
+  @@index([createdById])
 }
 
 // New role model to allow multiple roles per user
@@ -211,8 +227,62 @@ model Event {
   Task        Task[]
   InviteToken InviteToken[]
   Attendance  Attendance[]
+  shiftGroups ShiftGroup[]
 
   @@index([createdById])
+}
+
+model ShiftGroup {
+  id          Int         @id @default(autoincrement())
+  eventId     Int
+  name        String
+  description String?
+  color       String      @default("#3b82f6")
+  icon        String?
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  slots       ShiftSlot[]
+
+  @@index([eventId])
+}
+
+model ShiftSlot {
+  id            Int                 @id @default(autoincrement())
+  groupId       Int
+  title         String?
+  startAt       DateTime
+  endAt         DateTime
+  maxPersons    Int?
+  isUnlimited   Boolean             @default(false)
+  description   String?
+  location      String?
+  requiredRole  String?
+  isLocked      Boolean             @default(false)
+  isClosed      Boolean             @default(false)
+  notes         String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  group         ShiftGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  registrations ShiftRegistration[]
+
+  @@index([groupId])
+}
+
+model ShiftRegistration {
+  id        Int       @id @default(autoincrement())
+  slotId    Int
+  userId    Int?
+  name      String
+  email     String?
+  createdAt DateTime  @default(now())
+  slot      ShiftSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id])
+
+  @@unique([slotId, email])
+  @@index([slotId])
+  @@index([userId])
 }
 
 model Sponsor {
