@@ -8,7 +8,7 @@
   },
   "scripts": {
     "db:seed": "prisma db seed",
-    "deploy": "npm run prisma:generate && prisma migrate deploy && npm run build && npm run db:seed",
+    "deploy": "npm run prisma:generate && prisma migrate deploy && npm run build",
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "node scripts/build.js",
     "build:ts": "tsc",
