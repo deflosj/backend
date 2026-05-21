@@ -54,13 +54,13 @@ Starts the development server with hot reload using nodemon.
 ```bash
 npm run build
 ```
-Compiles TypeScript to JavaScript in the `dist/` directory locally. On Vercel, the same command also runs Prisma generation, applies migrations, and seeds the database.
+Compiles TypeScript to JavaScript in the `dist/` directory locally. On Vercel, the same command also runs Prisma generation and applies migrations.
 
 ### Deploy
 ```bash
 npm run deploy
 ```
-Runs Prisma generation, applies pending Prisma migrations, builds the app, and seeds the database in one deploy-oriented command.
+Runs Prisma generation, applies pending Prisma migrations, and builds the app in one deploy-oriented command.
 
 ### Production
 ```bash
