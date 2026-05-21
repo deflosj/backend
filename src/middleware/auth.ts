@@ -28,8 +28,6 @@ const parseBearerToken = (header: string | undefined): string | null => {
 export const requireAuth = (req: Request, _res: Response, next: NextFunction): void => {
   const token = parseBearerToken(req.headers.authorization);
   
-  console.log("Authorization header:", req.headers.authorization);
-
   if (!token) {
     next(new HttpError(401, "Authorization token is required"));
     return;
