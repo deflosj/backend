@@ -6,6 +6,9 @@ import {
   removeRegistration,
   getRegistrationSettings,
   updateRegistrationSettings,
+  createRegistration,
+  countActiveRegistrationsByCategory,
+  type CreateRegistrationInput,
 } from "../repositories/registrationRepository";
 
 export const getAllRegistrations = async () => listRegistrations();
@@ -20,6 +23,20 @@ export const changeRaceCategory = async (id: number, raceCategory: RaceCategory)
   updateRaceCategory(id, raceCategory);
 
 export const deleteRegistration = async (id: number) => removeRegistration(id);
+
+export const submitRegistration = async (input: CreateRegistrationInput): Promise<Registration> => {
+  const settings = await getRegistrationSettings();
+  if (!settings.isOpen) throw Object.assign(new Error("Registrations are currently closed"), { status: 400 });
+
+  const limit =
+    input.raceCategory === "DORPELINGENKOERS" ? settings.dorpelingenkoersLimit : settings.funWedstrijdLimit;
+  if (limit !== null && limit !== undefined) {
+    const count = await countActiveRegistrationsByCategory(input.raceCategory);
+    if (count >= limit) throw Object.assign(new Error("Registration limit reached for this category"), { status: 400 });
+  }
+
+  return createRegistration(input);
+};
 
 export const fetchRegistrationSettings = async () => getRegistrationSettings();
 

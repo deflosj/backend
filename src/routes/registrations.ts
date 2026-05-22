@@ -10,9 +10,44 @@ import {
   deleteRegistration,
   fetchRegistrationSettings,
   saveRegistrationSettings,
+  submitRegistration,
 } from "../services/registrationService";
 
 const registrationsRouter = Router();
+
+registrationsRouter.post(
+  "/",
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { firstName, lastName, dateOfBirth, gender, address, nationalRegisterNumber, email, phone, wielerclub, raceCategory } = req.body as {
+        firstName: string;
+        lastName: string;
+        dateOfBirth?: string;
+        gender: string;
+        address: string;
+        nationalRegisterNumber: string;
+        email: string;
+        phone: string;
+        wielerclub?: string;
+        raceCategory: RaceCategory;
+      };
+
+      if (!firstName || !lastName || !gender || !address || !nationalRegisterNumber || !email || !phone || !raceCategory) {
+        res.status(400).json({ message: "Missing required fields" });
+        return;
+      }
+      if (!Object.values(RaceCategory).includes(raceCategory)) {
+        res.status(400).json({ message: "Invalid raceCategory" });
+        return;
+      }
+
+      const registration = await submitRegistration({ firstName, lastName, dateOfBirth, gender, address, nationalRegisterNumber, email, phone, wielerclub, raceCategory });
+      res.status(201).json(registration);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 registrationsRouter.get(
   "/",

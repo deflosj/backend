@@ -1,6 +1,29 @@
 import { RaceCategory, Registration, RegistrationSettings, RegistrationStatus } from "@prisma/client";
 import prisma from "../database/prisma";
 
+export type CreateRegistrationInput = {
+  firstName: string;
+  lastName: string;
+  dateOfBirth?: string;
+  gender: string;
+  address: string;
+  nationalRegisterNumber: string;
+  email: string;
+  phone: string;
+  wielerclub?: string;
+  raceCategory: RaceCategory;
+};
+
+export const createRegistration = async (data: CreateRegistrationInput): Promise<Registration> => {
+  return prisma.registration.create({ data });
+};
+
+export const countActiveRegistrationsByCategory = async (raceCategory: RaceCategory): Promise<number> => {
+  return prisma.registration.count({
+    where: { raceCategory, status: { in: [RegistrationStatus.PENDING, RegistrationStatus.APPROVED] } },
+  });
+};
+
 export const listRegistrations = async (): Promise<Registration[]> => {
   return prisma.registration.findMany({ orderBy: { timestamp: "desc" } });
 };
