@@ -1,8 +1,9 @@
 import { NextFunction, Request, Response, Router } from "express";
-import { UserRole } from "@prisma/client";
+import { z } from "zod";
 import { HttpError } from "../utils/httpError";
 import { requireAuth } from "../middleware/auth";
-import { requireRole } from "../middleware/authorizeRole";
+import { requireAccess } from "../middleware/authorizeRole";
+import { validate } from "../utils/validate";
 import {
   createNewEvent,
   createNewSponsor,
@@ -16,9 +17,17 @@ import {
   listEvents,
   listNewsPosts,
   listSponsors,
-} from "../services/contentService";
+} from "../services/content.service";
 
 const contentRouter = Router();
+
+const contentIdParamsSchema = z.object({
+  id: z.coerce.number().int().positive({ message: "Invalid id" }),
+});
+
+const contentSlugParamsSchema = z.object({
+  slug: z.string().min(1, { message: "Slug is required" }),
+});
 
 interface NewsPostBody {
   title?: string;
@@ -54,7 +63,7 @@ contentRouter.get("/news", async (_req: Request, res: Response, next: NextFuncti
   }
 });
 
-contentRouter.get("/news/:slug", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+contentRouter.get("/news/:slug", validate({ params: contentSlugParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await getNewsPost(req.params.slug));
   } catch (error) {
@@ -65,7 +74,7 @@ contentRouter.get("/news/:slug", async (req: Request, res: Response, next: NextF
 contentRouter.post(
   "/news",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageContent"),
   async (req: Request<unknown, unknown, NewsPostBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.authUser) {
@@ -91,7 +100,8 @@ contentRouter.post(
 contentRouter.patch(
   "/news/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageContent"),
+  validate({ params: contentIdParamsSchema }),
   async (req: Request<{ id: string }, unknown, NewsPostBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(
@@ -120,7 +130,7 @@ contentRouter.get("/events", async (_req: Request, res: Response, next: NextFunc
 contentRouter.get(
   "/events/all",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageContent"),
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await listAllEvents());
@@ -130,7 +140,7 @@ contentRouter.get(
   }
 );
 
-contentRouter.get("/events/:id", async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
+contentRouter.get("/events/:id", validate({ params: contentIdParamsSchema }), async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await getEvent(Number.parseInt(req.params.id, 10)));
   } catch (error) {
@@ -141,7 +151,7 @@ contentRouter.get("/events/:id", async (req: Request<{ id: string }>, res: Respo
 contentRouter.post(
   "/events",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageContent"),
   async (req: Request<unknown, unknown, EventBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.authUser) {
@@ -168,7 +178,8 @@ contentRouter.post(
 contentRouter.patch(
   "/events/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageContent"),
+  validate({ params: contentIdParamsSchema }),
   async (req: Request<{ id: string }, unknown, EventBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(
@@ -198,7 +209,7 @@ contentRouter.get("/sponsors", async (_req: Request, res: Response, next: NextFu
 contentRouter.post(
   "/sponsors",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageContent"),
   async (req: Request<unknown, unknown, SponsorBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.status(201).json(
@@ -220,7 +231,8 @@ contentRouter.post(
 contentRouter.patch(
   "/sponsors/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageContent"),
+  validate({ params: contentIdParamsSchema }),
   async (req: Request<{ id: string }, unknown, SponsorBody>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(

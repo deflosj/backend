@@ -1,5 +1,8 @@
+import { Request, Response, NextFunction } from "express";
 import { HttpError } from "../utils/httpError";
 import { createLogger } from "../utils/logger";
+import { validate } from "../utils/validate";
+import { z } from "zod";
 
 describe("HttpError", () => {
   it("creates an error with statusCode and message", () => {
@@ -108,5 +111,49 @@ describe("Logger", () => {
       logger.info("test");
       expect(console.log).toHaveBeenCalled();
     });
+  });
+});
+
+describe("validate", () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: jest.MockedFunction<NextFunction>;
+
+  beforeEach(() => {
+    req = {
+      body: { name: "Alice" },
+      params: { id: "42" },
+      query: { page: "2" },
+    };
+    res = {};
+    next = jest.fn();
+  });
+
+  it("validates body, params, and query schemas", () => {
+    const middleware = validate({
+      body: z.object({ name: z.string().min(1) }),
+      params: z.object({ id: z.coerce.number().int().positive() }),
+      query: z.object({ page: z.coerce.number().int().positive() }),
+    });
+
+    middleware(req as Request, res as Response, next);
+
+    expect(req.body).toEqual({ name: "Alice" });
+    expect(req.params).toEqual({ id: 42 });
+    expect(req.query).toEqual({ page: 2 });
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it("returns a 400 error when params fail validation", () => {
+    req.params = { id: "abc" };
+
+    const middleware = validate({
+      params: z.object({ id: z.coerce.number().int().positive() }),
+    });
+
+    middleware(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledWith(expect.any(HttpError));
+    expect((next.mock.calls[0][0] as unknown as HttpError).statusCode).toBe(400);
   });
 });

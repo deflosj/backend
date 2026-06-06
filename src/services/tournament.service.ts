@@ -23,6 +23,7 @@ import {
   findPoulesWithTeams,
   findTeamById,
   findTeamsByPoule,
+  TeamStanding,
   findTeamsByTournament,
   findTiebreakerByTournament,
   findTournamentById,
@@ -39,7 +40,7 @@ import {
   updateTeam,
   updateTournament,
   upsertTiebreaker,
-  upsertTournamentRules,
+  updateTournamentRules,
 } from "../repositories/tournamentRepository";
 
 // ── Tournaments ───────────────────────────────────────────────────────────────
@@ -81,10 +82,10 @@ export const setActiveTournament = async (id: number) => {
 
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
-export const saveTournamentRules = async (tournamentId: number, description: string) => {
+export const saveTournamentRules = async (tournamentId: number, rules: string) => {
   await getTournament(tournamentId);
-  if (!description?.trim()) throw new HttpError(400, "Description is required");
-  return upsertTournamentRules(tournamentId, description.trim());
+  if (!rules?.trim()) throw new HttpError(400, "Rules are required");
+  return updateTournamentRules(tournamentId, rules.trim());
 };
 
 // ── Poules ────────────────────────────────────────────────────────────────────
@@ -132,9 +133,11 @@ export const getTeam = async (id: number) => {
 export const addTeam = async (tournamentId: number, data: TeamData) => {
   await getTournament(tournamentId);
   if (!data.name?.trim()) throw new HttpError(400, "Name is required");
-  if (!data.captainName?.trim()) throw new HttpError(400, "Captain name is required");
-  if (!data.speler1?.trim() || !data.speler2?.trim() || !data.speler3?.trim() || !data.speler4?.trim()) {
-    throw new HttpError(400, "All 4 player names are required");
+  if (!Array.isArray(data.players) || data.players.length === 0) {
+    throw new HttpError(400, "At least one player is required");
+  }
+  if (data.players.some((p) => !p.name?.trim())) {
+    throw new HttpError(400, "All player names are required");
   }
   return createTeam(tournamentId, data);
 };
@@ -311,9 +314,9 @@ export const generateGroupMatches = async (
           pouleId: poule.id,
           teamAId: teamA.id,
           teamBId: teamB.id,
-          time: roundTime,
+          scheduledAt: roundTime,
           track: trackBase + matchIdx,
-          phase: Phase.GROUP,
+          phase: Phase.GROUP_STAGE,
           bracketPos: null,
         });
       }
@@ -348,21 +351,21 @@ export const generateKnockout = async (
   if (poules.length === 0) throw new HttpError(400, "No group-phase poules found");
 
   // Rank teams per poule
-  const pouleStandings: Team[][] = await Promise.all(
+  const pouleStandings: TeamStanding[][] = await Promise.all(
     poules.map((p) => findTeamsByPoule(p.id))
   );
 
   // Collect advancing teams per poule (top N)
-  const advancingByPoule: Team[][] = pouleStandings.map((standing) =>
+  const advancingByPoule: TeamStanding[][] = pouleStandings.map((standing) =>
     standing.slice(0, teamsAdvancing)
   );
 
   // Collect best Nth-place finishers (position = teamsAdvancing, 0-indexed)
-  let extraTeams: Team[] = [];
+  let extraTeams: TeamStanding[] = [];
   if (bestNths > 0) {
     const nthPlace = pouleStandings
       .map((standing) => standing[teamsAdvancing] ?? null)
-      .filter((t): t is Team => t !== null)
+      .filter((t): t is TeamStanding => t !== null)
       .sort((a, b) => b.points - a.points || b.saldo - a.saldo || b.goalsFor - a.goalsFor)
       .slice(0, bestNths);
     extraTeams = nthPlace;
@@ -393,16 +396,16 @@ export const generateKnockout = async (
         pouleId: null,
         teamAId: pouleA[0]?.id ?? null,
         teamBId: pouleB[1]?.id ?? null,
-        time: sfTime,
+        scheduledAt: sfTime,
         track: i + 1,
-        phase: Phase.SEMI,
+        phase: Phase.SEMI_FINAL,
         bracketPos: `SF${i + 1}`,
       });
     }
 
     matchRows.push(
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, time: cfTime, track: 1, phase: Phase.CONSOLATION_FINAL, bracketPos: "CF1" },
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, time: fTime, track: 1, phase: Phase.FINAL, bracketPos: "F1" },
+      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: cfTime, track: 1, phase: Phase.CONSOLATION_FINAL, bracketPos: "CF1" },
+      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: fTime, track: 1, phase: Phase.FINAL, bracketPos: "F1" },
     );
 
   } else if (totalAdvancing <= 8) {
@@ -420,8 +423,8 @@ export const generateKnockout = async (
         tournamentId, pouleId: null,
         teamAId: allAdvancing[i]?.id ?? null,
         teamBId: allAdvancing[allAdvancing.length - 1 - i]?.id ?? null,
-        time: qfTime, track: i + 1,
-        phase: Phase.QUARTER,
+        scheduledAt: qfTime, track: i + 1,
+        phase: Phase.QUARTER_FINAL,
         bracketPos: `QF${i + 1}`,
       });
     }
@@ -430,15 +433,15 @@ export const generateKnockout = async (
       matchRows.push({
         tournamentId, pouleId: null,
         teamAId: null, teamBId: null,
-        time: sfTime, track: i + 1,
-        phase: Phase.SEMI,
+        scheduledAt: sfTime, track: i + 1,
+        phase: Phase.SEMI_FINAL,
         bracketPos: `SF${i + 1}`,
       });
     }
 
     matchRows.push(
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, time: cfTime, track: 1, phase: Phase.CONSOLATION_FINAL, bracketPos: "CF1" },
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, time: fTime, track: 1, phase: Phase.FINAL, bracketPos: "F1" },
+      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: cfTime, track: 1, phase: Phase.CONSOLATION_FINAL, bracketPos: "CF1" },
+      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: fTime, track: 1, phase: Phase.FINAL, bracketPos: "F1" },
     );
 
   } else {

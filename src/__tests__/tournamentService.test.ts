@@ -1,4 +1,4 @@
-import { Team } from "@prisma/client";
+import { TournamentStatus } from "@prisma/client";
 import {
   addTournament,
   setActiveTournament,
@@ -13,12 +13,12 @@ import {
   generateGroupMatches,
   generateKnockout,
   applyDelay,
-} from "../services/tournamentService";
+} from "../services/tournament.service";
 import {
   findTournamentById,
   createTournament,
   activateTournament,
-  upsertTournamentRules,
+  updateTournamentRules,
   findPouleById,
   findMatchById,
   scoreMatch,
@@ -32,6 +32,8 @@ import {
   findTeamsByPoule,
   deleteKnockoutMatches,
   shiftFutureMatchTimes,
+  TeamWithPlayers,
+  TeamStanding,
 } from "../repositories/tournamentRepository";
 
 jest.mock("../repositories/tournamentRepository", () => ({
@@ -70,14 +72,14 @@ jest.mock("../repositories/tournamentRepository", () => ({
   updateTeam: jest.fn(),
   updateTournament: jest.fn(),
   upsertTiebreaker: jest.fn(),
-  upsertTournamentRules: jest.fn(),
+  updateTournamentRules: jest.fn(),
 }));
 
 const repo = {
   findTournamentById: findTournamentById as jest.Mock,
   createTournament: createTournament as jest.Mock,
   activateTournament: activateTournament as jest.Mock,
-  upsertTournamentRules: upsertTournamentRules as jest.Mock,
+  updateTournamentRules: updateTournamentRules as jest.Mock,
   findPouleById: findPouleById as jest.Mock,
   findMatchById: findMatchById as jest.Mock,
   scoreMatch: scoreMatch as jest.Mock,
@@ -100,12 +102,13 @@ const fakeTournament = {
   name: "Toernooi 2025",
   year: 2025,
   isActive: true,
-  status: "UPCOMING",
+  status: TournamentStatus.UPCOMING,
   teamsPerPoule: 4,
   teamsAdvancingPerPoule: 2,
   bestNthsAdvancing: 0,
   createdAt: new Date("2025-01-01"),
   rules: null,
+  rulesUpdatedAt: null,
   poules: [],
   teams: [],
   matches: [],
@@ -137,7 +140,7 @@ const fakeMatch = {
 
 const fakeTiebreaker = { id: 1, tournamentId: 1, winnerId: null, teams: [] };
 
-const makeTeam = (id: number, overrides: Partial<Team> = {}): Team => ({
+const makeTeam = (id: number, overrides: Partial<TeamWithPlayers> = {}): TeamWithPlayers => ({
   id,
   tournamentId: 1,
   captainId: null,
@@ -145,11 +148,12 @@ const makeTeam = (id: number, overrides: Partial<Team> = {}): Team => ({
   name: `Team ${id}`,
   logoUrl: null,
   isPresent: true,
-  speler1: "p1",
-  speler2: "p2",
-  speler3: "p3",
-  speler4: "p4",
-  captainName: "Cap",
+  players: [{ id: 1, teamId: id, name: "p1", isCaptain: true }],
+  ...overrides,
+});
+
+const makeStanding = (id: number, overrides: Partial<TeamStanding> = {}): TeamStanding => ({
+  ...makeTeam(id, overrides),
   played: 3,
   won: 1,
   drawn: 0,
@@ -217,11 +221,11 @@ describe("setActiveTournament", () => {
   });
 
   it("calls activateTournament and returns tournament with ONGOING status", async () => {
-    const activated = { ...fakeTournament, isActive: true, status: "ONGOING" };
+    const activated = { ...fakeTournament, isActive: true, status: TournamentStatus.ONGOING };
     repo.activateTournament.mockResolvedValue(activated);
     const result = await setActiveTournament(1);
     expect(repo.activateTournament).toHaveBeenCalledWith(1);
-    expect(result.status).toBe("ONGOING");
+    expect(result.status).toBe(TournamentStatus.ONGOING);
     expect(result.isActive).toBe(true);
   });
 });
@@ -234,23 +238,22 @@ describe("saveTournamentRules", () => {
     await expect(saveTournamentRules(1, "Reglement")).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it("throws 400 when description is empty", async () => {
+  it("throws 400 when rules is empty", async () => {
     await expect(saveTournamentRules(1, "")).rejects.toMatchObject({
       statusCode: 400,
-      message: "Description is required",
+      message: "Rules are required",
     });
-    expect(repo.upsertTournamentRules).not.toHaveBeenCalled();
+    expect(repo.updateTournamentRules).not.toHaveBeenCalled();
   });
 
-  it("throws 400 when description is only whitespace", async () => {
+  it("throws 400 when rules is only whitespace", async () => {
     await expect(saveTournamentRules(1, "   ")).rejects.toMatchObject({ statusCode: 400 });
   });
 
-  it("trims description before saving", async () => {
-    const rules = { id: 1, tournamentId: 1, description: "Reglement", updatedAt: new Date() };
-    repo.upsertTournamentRules.mockResolvedValue(rules);
+  it("trims rules before saving", async () => {
+    repo.updateTournamentRules.mockResolvedValue({ ...fakeTournament, rules: "Reglement", rulesUpdatedAt: new Date() });
     await saveTournamentRules(1, "  Reglement  ");
-    expect(repo.upsertTournamentRules).toHaveBeenCalledWith(1, "Reglement");
+    expect(repo.updateTournamentRules).toHaveBeenCalledWith(1, "Reglement");
   });
 });
 
@@ -287,11 +290,12 @@ describe("removePoule", () => {
 describe("addTeam", () => {
   const validTeam = {
     name: "De Vlaamse Arend",
-    captainName: "Luca Janssen",
-    speler1: "Luca",
-    speler2: "Tom",
-    speler3: "Wout",
-    speler4: "Jens",
+    players: [
+      { name: "Luca", isCaptain: true },
+      { name: "Tom" },
+      { name: "Wout" },
+      { name: "Jens" },
+    ],
   };
 
   it("throws 404 when tournament not found", async () => {
@@ -306,36 +310,26 @@ describe("addTeam", () => {
     });
   });
 
-  it("throws 400 when captainName is empty", async () => {
-    await expect(addTeam(1, { ...validTeam, captainName: "" })).rejects.toMatchObject({
+  it("throws 400 when players array is empty", async () => {
+    await expect(addTeam(1, { ...validTeam, players: [] })).rejects.toMatchObject({
       statusCode: 400,
-      message: "Captain name is required",
+      message: "At least one player is required",
     });
   });
 
-  it("throws 400 when speler1 is empty", async () => {
-    await expect(addTeam(1, { ...validTeam, speler1: "" })).rejects.toMatchObject({
+  it("throws 400 when a player name is empty", async () => {
+    await expect(
+      addTeam(1, { ...validTeam, players: [{ name: "" }] })
+    ).rejects.toMatchObject({
       statusCode: 400,
-      message: "All 4 player names are required",
+      message: "All player names are required",
     });
   });
 
-  it("throws 400 when speler2 is empty", async () => {
-    await expect(addTeam(1, { ...validTeam, speler2: "  " })).rejects.toMatchObject({
-      statusCode: 400,
-    });
-  });
-
-  it("throws 400 when speler3 is empty", async () => {
-    await expect(addTeam(1, { ...validTeam, speler3: "" })).rejects.toMatchObject({
-      statusCode: 400,
-    });
-  });
-
-  it("throws 400 when speler4 is empty", async () => {
-    await expect(addTeam(1, { ...validTeam, speler4: "" })).rejects.toMatchObject({
-      statusCode: 400,
-    });
+  it("throws 400 when a player name is whitespace only", async () => {
+    await expect(
+      addTeam(1, { ...validTeam, players: [{ name: "Luca" }, { name: "  " }] })
+    ).rejects.toMatchObject({ statusCode: 400 });
   });
 });
 
@@ -603,9 +597,9 @@ describe("generateKnockout", () => {
   const startTime = new Date("2025-06-21T11:00:00");
   const slotMinutes = 60;
 
-  const ranked = (pouleId: number, count: number): Team[] =>
+  const ranked = (pouleId: number, count: number): TeamStanding[] =>
     Array.from({ length: count }, (_, i) =>
-      makeTeam(pouleId * 10 + i, { pouleId, points: (count - i) * 3 })
+      makeStanding(pouleId * 10 + i, { pouleId, points: (count - i) * 3 })
     );
 
   it("throws 400 when no group-phase poules exist", async () => {

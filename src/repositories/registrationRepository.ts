@@ -1,11 +1,11 @@
-import { RaceCategory, Registration, RegistrationSettings, RegistrationStatus } from "@prisma/client";
+import { Gender, RaceCategory, Registration, RegistrationSettings, RegistrationStatus } from "@prisma/client";
 import prisma from "../database/prisma";
 
 export type CreateRegistrationInput = {
   firstName: string;
   lastName: string;
   dateOfBirth?: string;
-  gender: string;
+  gender: Gender;
   address: string;
   nationalRegisterNumber: string;
   email: string;
@@ -25,7 +25,7 @@ export const countActiveRegistrationsByCategory = async (raceCategory: RaceCateg
 };
 
 export const listRegistrations = async (): Promise<Registration[]> => {
-  return prisma.registration.findMany({ orderBy: { timestamp: "desc" } });
+  return prisma.registration.findMany({ orderBy: { createdAt: "desc" } });
 };
 
 export const updateRegistrationStatus = async (id: number, status: RegistrationStatus): Promise<Registration> => {

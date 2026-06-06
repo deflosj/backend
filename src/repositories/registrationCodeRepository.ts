@@ -32,12 +32,6 @@ export const toggleRegistrationCode = async (id: number): Promise<RegistrationCo
   });
 };
 
-export const incrementUsedCount = async (id: number): Promise<void> => {
-  await prisma.registrationCode.update({
-    where: { id },
-    data: { usedCount: { increment: 1 } },
-  });
-};
 
 export const deleteRegistrationCode = async (id: number): Promise<void> => {
   await prisma.registrationCode.delete({ where: { id } });

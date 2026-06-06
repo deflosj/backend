@@ -1,7 +1,10 @@
 import { NextFunction, Request, Response, Router } from "express";
-import { RaceCategory, UserRole } from "@prisma/client";
+import { z } from "zod";
+import { Gender, RaceCategory } from "@prisma/client";
 import { requireAuth } from "../middleware/auth";
-import { requireRole } from "../middleware/authorizeRole";
+import { HttpError } from "../utils/httpError";
+import { validate } from "../utils/validate";
+import { requireAccess } from "../middleware/authorizeRole";
 import {
   getAllRegistrations,
   approveRegistration,
@@ -11,38 +14,46 @@ import {
   fetchRegistrationSettings,
   saveRegistrationSettings,
   submitRegistration,
-} from "../services/registrationService";
+} from "../services/registration.service";
 
 const registrationsRouter = Router();
 
+// Belgian national register number: raw 11 digits or formatted YY.MM.DD-XXX.CC
+const RRNN_REGEX = /^\d{2}\.\d{2}\.\d{2}-\d{3}\.\d{2}$|^\d{11}$/;
+// Belgian/international phone: optional +, digits/spaces/hyphens/parens, 7–20 chars
+const PHONE_REGEX = /^\+?[\d\s()-]{7,20}$/;
+// Basic email: requires local-part @ domain . tld — rejects bare "name@" etc.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const GENDER_VALUES = Object.values(Gender) as [Gender, ...Gender[]];
+const RACE_CATEGORY_VALUES = Object.values(RaceCategory) as [RaceCategory, ...RaceCategory[]];
+
+const registrationParamsSchema = z.object({
+  id: z.coerce.number().int().positive({ message: "Invalid registration id" }),
+});
+
+const submitRegistrationSchema = z.object({
+  firstName: z.string().min(1, { message: "Voornaam is verplicht" }).max(100),
+  lastName: z.string().min(1, { message: "Achternaam is verplicht" }).max(100),
+  dateOfBirth: z.string().optional(),
+  gender: z.enum(GENDER_VALUES),
+  address: z.string().min(1, { message: "Adres is verplicht" }).max(500),
+  nationalRegisterNumber: z
+    .string()
+    .regex(RRNN_REGEX, { message: "Ongeldig rijksregisternummer (gebruik YY.MM.DD-XXX.CC of 11 cijfers)" }),
+  email: z.string().regex(EMAIL_REGEX, { message: "Ongeldig e-mailadres" }),
+  phone: z.string().regex(PHONE_REGEX, { message: "Ongeldig telefoonnummer" }),
+  wielerclub: z.string().max(200).optional(),
+  raceCategory: z.enum(RACE_CATEGORY_VALUES),
+});
+
 registrationsRouter.post(
   "/",
+  validate(submitRegistrationSchema),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { firstName, lastName, dateOfBirth, gender, address, nationalRegisterNumber, email, phone, wielerclub, raceCategory } = req.body as {
-        firstName: string;
-        lastName: string;
-        dateOfBirth?: string;
-        gender: string;
-        address: string;
-        nationalRegisterNumber: string;
-        email: string;
-        phone: string;
-        wielerclub?: string;
-        raceCategory: RaceCategory;
-      };
-
-      if (!firstName || !lastName || !gender || !address || !nationalRegisterNumber || !email || !phone || !raceCategory) {
-        res.status(400).json({ message: "Missing required fields" });
-        return;
-      }
-      if (!Object.values(RaceCategory).includes(raceCategory)) {
-        res.status(400).json({ message: "Invalid raceCategory" });
-        return;
-      }
-
-      const registration = await submitRegistration({ firstName, lastName, dateOfBirth, gender, address, nationalRegisterNumber, email, phone, wielerclub, raceCategory });
-      res.status(201).json(registration);
+      const data = req.body as z.infer<typeof submitRegistrationSchema>;
+      res.status(201).json(await submitRegistration(data));
     } catch (error) {
       next(error);
     }
@@ -52,7 +63,7 @@ registrationsRouter.post(
 registrationsRouter.get(
   "/",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageRegistrations"),
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await getAllRegistrations());
@@ -66,7 +77,7 @@ registrationsRouter.get(
 registrationsRouter.get(
   "/settings",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageRegistrations"),
   async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await fetchRegistrationSettings());
@@ -79,7 +90,7 @@ registrationsRouter.get(
 registrationsRouter.patch(
   "/settings",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageRegistrations"),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { isOpen, dorpelingenkoersLimit, funWedstrijdLimit } = req.body as {
@@ -97,7 +108,8 @@ registrationsRouter.patch(
 registrationsRouter.patch(
   "/:id/approve",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageRegistrations"),
+  validate({ params: registrationParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await approveRegistration(Number.parseInt(req.params.id, 10)));
@@ -110,7 +122,8 @@ registrationsRouter.patch(
 registrationsRouter.patch(
   "/:id/reject",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageRegistrations"),
+  validate({ params: registrationParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       res.json(await rejectRegistration(Number.parseInt(req.params.id, 10)));
@@ -123,12 +136,13 @@ registrationsRouter.patch(
 registrationsRouter.patch(
   "/:id/category",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageRegistrations"),
+  validate({ params: registrationParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { raceCategory } = req.body as { raceCategory: RaceCategory };
       if (!Object.values(RaceCategory).includes(raceCategory)) {
-        res.status(400).json({ message: "Invalid raceCategory" });
+        next(new HttpError(400, "Invalid raceCategory"));
         return;
       }
       res.json(await changeRaceCategory(Number.parseInt(req.params.id, 10), raceCategory));
@@ -141,7 +155,8 @@ registrationsRouter.patch(
 registrationsRouter.delete(
   "/:id",
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.SUPERADMIN),
+  requireAccess("manageRegistrations"),
+  validate({ params: registrationParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction): Promise<void> => {
     try {
       await deleteRegistration(Number.parseInt(req.params.id, 10));

@@ -10,8 +10,19 @@ export interface MemberProfileData {
   isPublic?: boolean;
 }
 
-export const findPublicMemberProfiles = async (): Promise<MemberProfile[]> => {
+const publicSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  bio: true,
+  joinedAt: true,
+} as const;
+
+export type PublicMemberProfile = Pick<MemberProfile, keyof typeof publicSelect>;
+
+export const findPublicMemberProfiles = async (): Promise<PublicMemberProfile[]> => {
   return prisma.memberProfile.findMany({
+    select: publicSelect,
     where: {
       isPublic: true,
       user: {
@@ -29,12 +40,13 @@ export const findPublicMemberProfiles = async (): Promise<MemberProfile[]> => {
   });
 };
 
-export const findPublicMemberProfileById = async (id: number): Promise<MemberProfile | null> => {
+export const findPublicMemberProfileById = async (id: number): Promise<PublicMemberProfile | null> => {
   if (!Number.isInteger(id) || id <= 0) {
     return null;
   }
 
   return prisma.memberProfile.findFirst({
+    select: publicSelect,
     where: {
       id,
       isPublic: true,

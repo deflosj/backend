@@ -5,9 +5,17 @@ import { HttpError } from "../utils/httpError";
 
 const logger = createLogger(config.logLevel);
 
+const sensitiveQueryKeys = new Set(["token", "email", "password"]);
+
+// Sanitize query parameters by removing sensitive keys
+const sanitizeQuery = (query: Request["query"]): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(query).filter(([key]) => !sensitiveQueryKeys.has(key.toLowerCase()))
+  );
+
 export const requestLogger = (req: Request, _res: Response, next: NextFunction): void => {
   logger.debug(`${req.method} ${req.path}`, {
-    query: req.query,
+    query: sanitizeQuery(req.query),
     params: req.params,
   });
   next();
@@ -23,7 +31,7 @@ export const errorHandler = (
 
   const statusCode = err instanceof HttpError ? err.statusCode : 500;
   const message =
-    err instanceof HttpError || process.env.NODE_ENV !== "production"
+    err instanceof HttpError || config.nodeEnv !== "production"
       ? err.message
       : "Internal server error";
 

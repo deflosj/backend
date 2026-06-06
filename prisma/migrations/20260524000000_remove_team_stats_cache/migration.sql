@@ -1,0 +1,9 @@
+ALTER TABLE "Team"
+  DROP COLUMN "played",
+  DROP COLUMN "won",
+  DROP COLUMN "drawn",
+  DROP COLUMN "lost",
+  DROP COLUMN "goalsFor",
+  DROP COLUMN "goalsAgainst",
+  DROP COLUMN "saldo",
+  DROP COLUMN "points";

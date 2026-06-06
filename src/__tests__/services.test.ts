@@ -2,7 +2,7 @@ import {
   listMembers,
   getMember,
   saveMyProfile,
-} from "../services/memberService";
+} from "../services/member.service";
 import {
   findPublicMemberProfileById,
   findPublicMemberProfiles,
@@ -211,7 +211,7 @@ import {
   createNewEvent,
   listSponsors,
   createNewSponsor,
-} from "../services/contentService";
+} from "../services/content.service";
 import {
   findPublishedNewsPosts,
   findPublishedNewsPostBySlug,
@@ -450,7 +450,7 @@ import {
   listMessages,
   readMessage,
   archiveMessage,
-} from "../services/contactService";
+} from "../services/contact.service";
 import {
   createContactMessage,
   listContactMessages,

@@ -1,20 +1,24 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { z } from "zod";
 import { UserRole } from "@prisma/client";
 import { requireAuth } from "../middleware/auth";
-import { requireRole } from "../middleware/authorizeRole";
+import { requireAccess } from "../middleware/authorizeRole";
 import { HttpError } from "../utils/httpError";
+import { validate } from "../utils/validate";
 import {
   createInviteCode,
   listInviteCodes,
   toggleInviteCode,
   removeInviteCode,
-} from "../services/registrationCodeService";
+} from "../services/registrationCode.service";
 
 const inviteCodesRouter = Router();
 
-const ALLOWED_ROLES: UserRole[] = ["ADMIN", "SUPERADMIN"];
+const inviteCodeParamsSchema = z.object({
+  id: z.coerce.number().int().positive({ message: "Invalid id" }),
+});
 
-inviteCodesRouter.use(requireAuth, requireRole(...ALLOWED_ROLES));
+inviteCodesRouter.use(requireAuth, requireAccess("manageInviteCodes"));
 
 inviteCodesRouter.get(
   "/",
@@ -58,10 +62,11 @@ inviteCodesRouter.post(
 
 inviteCodesRouter.patch(
   "/:id/toggle",
+  validate({ params: inviteCodeParamsSchema }),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) throw new HttpError(400, "Invalid id");
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) throw new HttpError(400, "Invalid id");
       const updated = await toggleInviteCode(id);
       res.json(updated);
     } catch (error) {
@@ -72,10 +77,11 @@ inviteCodesRouter.patch(
 
 inviteCodesRouter.delete(
   "/:id",
+  validate({ params: inviteCodeParamsSchema }),
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const id = Number(req.params.id);
-      if (isNaN(id)) throw new HttpError(400, "Invalid id");
+      const id = Number.parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) throw new HttpError(400, "Invalid id");
       await removeInviteCode(id);
       res.status(204).send();
     } catch (error) {

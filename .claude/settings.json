@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(perl -i -pe 's/\\\\bNumber\\\\\\(\\([^\\(\\)]+\\)\\\\\\)/Number.parseInt\\($1, 10\\)/g' /Users/persynwannes/Documents/Projects/DeFlosj/backend/src/routes/tournament.ts)",
+      "Bash(PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION=\"Yes, I consent\" npx prisma migrate reset --force)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\(\\); console.log\\('API_PREFIX:', JSON.stringify\\(process.env.API_PREFIX\\)\\);\")",
+      "Bash(git -C /Users/persynwannes/Documents/Projects/DeFlosj/backend diff HEAD -- src/__tests__/tournament.test.ts)",
+      "Bash(node -e \"const config = require\\('./dist/config'\\).default; console.log\\('apiPrefix:', config.apiPrefix\\);\")",
+      "Bash(npx ts-node *)",
+      "Bash(npm cache *)",
+      "Bash(npm start *)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(netstat -anp tcp)",
+      "Bash(lsof -nP -iTCP:8000)",
+      "Bash(sudo lsof -i :8000)",
+      "Bash(netstat -anvp tcp)"
+    ]
+  }
+}

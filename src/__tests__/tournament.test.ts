@@ -1,11 +1,12 @@
 import request from "supertest";
 import jwt from "jsonwebtoken";
+import { TournamentStatus } from "@prisma/client";
 import { createApp } from "../app";
 import config from "../config";
 import { HttpError } from "../utils/httpError";
-import * as tournamentService from "../services/tournamentService";
+import * as tournamentService from "../services/tournament.service";
 
-jest.mock("../services/tournamentService");
+jest.mock("../services/tournament.service");
 
 const svc = tournamentService as jest.Mocked<typeof tournamentService>;
 const app = createApp();
@@ -28,22 +29,22 @@ const T = {
   name: "Toernooi 2025",
   year: 2025,
   isActive: true,
-  status: "ONGOING",
+  status: TournamentStatus.ONGOING,
   teamsPerPoule: 4,
   teamsAdvancingPerPoule: 2,
   bestNthsAdvancing: 0,
   createdAt: new Date("2025-01-01"),
   rules: null,
+  rulesUpdatedAt: null,
   poules: [],
   teams: [],
   matches: [],
 };
 
-const RULES = {
-  id: 1,
-  tournamentId: 1,
-  description: "Reglement",
-  updatedAt: new Date("2025-01-01"),
+const RULES_TOURNAMENT = {
+  ...T,
+  rules: "Reglement",
+  rulesUpdatedAt: new Date("2025-01-01"),
 };
 
 const POULE = {
@@ -51,7 +52,7 @@ const POULE = {
   tournamentId: 1,
   name: "Poule A",
   description: null,
-  phase: "GROUP" as const,
+  phase: "GROUP_STAGE" as const,
   teams: [],
 };
 
@@ -63,19 +64,12 @@ const TEAM = {
   name: "De Vlaamse Arend",
   logoUrl: null,
   isPresent: false,
-  speler1: "Luca",
-  speler2: "Tom",
-  speler3: "Wout",
-  speler4: "Jens",
-  captainName: "Luca Janssen",
-  played: 0,
-  won: 0,
-  drawn: 0,
-  lost: 0,
-  goalsFor: 0,
-  goalsAgainst: 0,
-  saldo: 0,
-  points: 0,
+  players: [
+    { id: 1, teamId: 1, name: "Luca", isCaptain: true },
+    { id: 2, teamId: 1, name: "Tom", isCaptain: false },
+    { id: 3, teamId: 1, name: "Wout", isCaptain: false },
+    { id: 4, teamId: 1, name: "Jens", isCaptain: false },
+  ],
 };
 
 const MATCH = {
@@ -85,9 +79,9 @@ const MATCH = {
   teamAId: 1,
   teamBId: 2,
   winnerId: null,
-  time: new Date("2025-06-21T09:00:00"),
+  scheduledAt: new Date("2025-06-21T09:00:00"),
   track: 1,
-  phase: "GROUP" as const,
+  phase: "GROUP_STAGE" as const,
   bracketPos: null,
   scoreA: null,
   scoreB: null,
@@ -190,7 +184,7 @@ describe("Tournament Routes", () => {
     });
 
     it("PUT /:id passes status field to service", async () => {
-      svc.editTournament.mockResolvedValue({ ...T, status: "COMPLETED" });
+      svc.editTournament.mockResolvedValue({ ...T, status: TournamentStatus.COMPLETED });
       const res = await request(app)
         .put("/tournaments/1")
         .set("Authorization", `Bearer ${adminToken}`)
@@ -211,7 +205,7 @@ describe("Tournament Routes", () => {
     });
 
     it("POST /:id/activate sets status to ONGOING", async () => {
-      svc.setActiveTournament.mockResolvedValue({ ...T, status: "ONGOING", isActive: true });
+      svc.setActiveTournament.mockResolvedValue({ ...T, status: TournamentStatus.ONGOING, isActive: true });
       const res = await request(app)
         .post("/tournaments/1/activate")
         .set("Authorization", `Bearer ${adminToken}`);
@@ -233,42 +227,42 @@ describe("Tournament Routes", () => {
 
   describe("Rules", () => {
     it("GET /:id/rules returns the tournament rules", async () => {
-      svc.getTournament.mockResolvedValue({ ...T, rules: RULES });
+      svc.getTournament.mockResolvedValue(RULES_TOURNAMENT);
       const res = await request(app).get("/tournaments/1/rules");
       expect(res.status).toBe(200);
-      expect(res.body.description).toBe("Reglement");
+      expect(res.body.rules).toBe("Reglement");
     });
 
     it("GET /:id/rules returns null when no rules exist", async () => {
-      svc.getTournament.mockResolvedValue({ ...T, rules: null });
+      svc.getTournament.mockResolvedValue(T);
       const res = await request(app).get("/tournaments/1/rules");
       expect(res.status).toBe(200);
-      expect(res.body).toBeNull();
+      expect(res.body.rules).toBeNull();
     });
 
     it("PUT /:id/rules saves rules as admin", async () => {
-      svc.saveTournamentRules.mockResolvedValue(RULES);
+      svc.saveTournamentRules.mockResolvedValue(RULES_TOURNAMENT);
       const res = await request(app)
         .put("/tournaments/1/rules")
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ description: "Reglement" });
+        .send({ rules: "Reglement" });
       expect(res.status).toBe(200);
-      expect(res.body.description).toBe("Reglement");
+      expect(res.body.rules).toBe("Reglement");
     });
 
-    it("PUT /:id/rules returns 400 when description is empty", async () => {
-      svc.saveTournamentRules.mockRejectedValue(new HttpError(400, "Description is required"));
+    it("PUT /:id/rules returns 400 when rules is empty", async () => {
+      svc.saveTournamentRules.mockRejectedValue(new HttpError(400, "Rules are required"));
       const res = await request(app)
         .put("/tournaments/1/rules")
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ description: "" });
+        .send({ rules: "" });
       expect(res.status).toBe(400);
     });
 
     it("PUT /:id/rules returns 401 without auth", async () => {
       const res = await request(app)
         .put("/tournaments/1/rules")
-        .send({ description: "X" });
+        .send({ rules: "X" });
       expect(res.status).toBe(401);
     });
   });
@@ -372,24 +366,25 @@ describe("Tournament Routes", () => {
         .set("Authorization", `Bearer ${adminToken}`)
         .send({
           name: "De Vlaamse Arend",
-          captainName: "Luca Janssen",
-          speler1: "Luca",
-          speler2: "Tom",
-          speler3: "Wout",
-          speler4: "Jens",
+          players: [
+            { name: "Luca", isCaptain: true },
+            { name: "Tom" },
+            { name: "Wout" },
+            { name: "Jens" },
+          ],
         });
       expect(res.status).toBe(201);
       expect(res.body.name).toBe("De Vlaamse Arend");
     });
 
     it("POST /:id/teams returns 400 when validation fails", async () => {
-      svc.addTeam.mockRejectedValue(new HttpError(400, "All 4 player names are required"));
+      svc.addTeam.mockRejectedValue(new HttpError(400, "All player names are required"));
       const res = await request(app)
         .post("/tournaments/1/teams")
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ name: "X", captainName: "Y", speler1: "a", speler2: "b", speler3: "", speler4: "d" });
+        .send({ name: "X", players: [{ name: "" }] });
       expect(res.status).toBe(400);
-      expect(res.body.message).toBe("All 4 player names are required");
+      expect(res.body.message).toBe("All player names are required");
     });
 
     it("POST /:id/teams returns 401 without auth", async () => {

@@ -1,3 +1,22 @@
+// =============================================================================
+// PRISMA SCHEMA
+// =============================================================================
+// Chapters:
+//   1. Generator & Datasource
+//   2. Enums
+//   3. Auth & Users
+//   4. Events & Shifts
+//   5. News & Sponsors
+//   6. Tournament
+//   7. Race Registrations
+//   8. Miscellaneous
+// =============================================================================
+
+
+// =============================================================================
+// 1. GENERATOR & DATASOURCE
+// =============================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +26,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
+// =============================================================================
+// 2. ENUMS
+// =============================================================================
+
+// --- Auth & Users ---
+
 enum UserRole {
   MEMBER
   CAPTAIN
@@ -15,7 +41,8 @@ enum UserRole {
   SUPERADMIN
 }
 
-// New enums for helper portal
+// --- Events & Shifts ---
+
 enum Shift {
   SETUP
   DURING
@@ -34,412 +61,43 @@ enum RSVPStatus {
   NO
 }
 
+// --- News & Sponsors ---
+
 enum SponsorTier {
   MAIN
   GOLD
   STANDARD
 }
 
+// --- Tournament ---
+
+enum TournamentStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
 enum Phase {
-  GROUP
-  R16
-  R8
-  QUARTER
-  SEMI
+  GROUP_STAGE
+  ROUND_OF_32
+  ROUND_OF_16
+  QUARTER_FINAL
+  SEMI_FINAL
   CONSOLATION_FINAL
   FINAL
   TIEBREAK
 }
 
-enum MsgStatus {
+// --- Messaging ---
+
+enum MessageStatus {
   UNREAD
   READ
   ARCHIVED
 }
 
-model User {
-  id                 Int                 @id @default(autoincrement())
-  email              String              @unique
-  username           String              @unique
-  password           String
-  role               UserRole            @default(MEMBER)
-  avatarUrl          String?
-  isActive           Boolean             @default(true)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  refreshTokens      RefreshToken[]
-  authoredNewsPosts  NewsPost[]          @relation("NewsPostAuthor")
-  createdEvents      Event[]             @relation("EventCreatedBy")
-  memberProfile      MemberProfile?
-  captainedTeams     Team[]              @relation("TeamCaptain")
-  UserRoleRel        UserRoleRel[]
-  Task               Task[]
-  InviteToken        InviteToken[]
-  Attendance         Attendance[]
-  TaskAssignee       TaskAssignee[]
-  registrationCodes  RegistrationCode[]
-  shiftRegistrations ShiftRegistration[]
-}
-
-model RegistrationCode {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  role        UserRole
-  label       String?
-  isActive    Boolean  @default(true)
-  usedCount   Int      @default(0)
-  createdAt   DateTime @default(now())
-  createdById Int?
-  creator     User?    @relation(fields: [createdById], references: [id])
-
-  @@index([createdById])
-}
-
-// New role model to allow multiple roles per user
-model Role {
-  id    Int           @id @default(autoincrement())
-  name  String        @unique
-  users UserRoleRel[]
-}
-
-model UserRoleRel {
-  id     Int  @id @default(autoincrement())
-  userId Int
-  roleId Int
-  user   User @relation(fields: [userId], references: [id])
-  role   Role @relation(fields: [roleId], references: [id])
-
-  @@unique([userId, roleId])
-  @@index([userId])
-  @@index([roleId])
-}
-
-// Tasks for event shifts
-model Task {
-  id           Int            @id @default(autoincrement())
-  eventId      Int
-  title        String
-  description  String?
-  shift        Shift
-  assignedToId Int?
-  maxHelpers   Int?
-  startAt      DateTime?
-  endAt        DateTime?
-  status       TaskStatus     @default(OPEN)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-
-  event      Event          @relation(fields: [eventId], references: [id])
-  assignedTo User?          @relation(fields: [assignedToId], references: [id])
-  assignees  TaskAssignee[]
-
-  @@index([eventId])
-  @@index([assignedToId])
-}
-
-// Multiple helpers per task (self-signup via invite link)
-model TaskAssignee {
-  id        Int      @id @default(autoincrement())
-  taskId    Int
-  userId    Int?
-  name      String
-  email     String?
-  createdAt DateTime @default(now())
-
-  task Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User? @relation(fields: [userId], references: [id])
-
-  @@unique([taskId, email])
-  @@index([taskId])
-  @@index([userId])
-}
-
-// Invite tokens which are valid until the event ends
-model InviteToken {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  eventId   Int
-  createdAt DateTime @default(now())
-  createdBy Int?
-
-  event   Event @relation(fields: [eventId], references: [id])
-  creator User? @relation(fields: [createdBy], references: [id])
-
-  @@index([eventId])
-}
-
-// Attendance / RSVP list
-model Attendance {
-  id        Int        @id @default(autoincrement())
-  eventId   Int
-  userId    Int?
-  name      String
-  email     String?
-  status    RSVPStatus @default(NO_RESPONSE)
-  createdAt DateTime   @default(now())
-
-  event Event @relation(fields: [eventId], references: [id])
-  user  User? @relation(fields: [userId], references: [id])
-
-  @@unique([eventId, email])
-  @@index([eventId])
-  @@index([userId])
-}
-
-model RefreshToken {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  token     String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-}
-
-model NewsPost {
-  id          Int       @id @default(autoincrement())
-  authorId    Int
-  title       String
-  slug        String    @unique
-  body        String
-  coverUrl    String?
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  author      User      @relation("NewsPostAuthor", fields: [authorId], references: [id])
-
-  @@index([authorId])
-}
-
-model Event {
-  id          Int           @id @default(autoincrement())
-  createdById Int
-  title       String
-  description String?
-  location    String?
-  startsAt    DateTime
-  endsAt      DateTime?
-  isPublished Boolean       @default(false)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  createdBy   User          @relation("EventCreatedBy", fields: [createdById], references: [id])
-  Task        Task[]
-  InviteToken InviteToken[]
-  Attendance  Attendance[]
-  shiftGroups ShiftGroup[]
-
-  @@index([createdById])
-}
-
-model ShiftGroup {
-  id          Int         @id @default(autoincrement())
-  eventId     Int
-  name        String
-  description String?
-  color       String      @default("#3b82f6")
-  icon        String?
-  sortOrder   Int         @default(0)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  event       Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  slots       ShiftSlot[]
-
-  @@index([eventId])
-}
-
-model ShiftSlot {
-  id            Int                 @id @default(autoincrement())
-  groupId       Int
-  title         String?
-  startAt       DateTime
-  endAt         DateTime
-  maxPersons    Int?
-  isUnlimited   Boolean             @default(false)
-  description   String?
-  location      String?
-  requiredRole  String?
-  isLocked      Boolean             @default(false)
-  isClosed      Boolean             @default(false)
-  notes         String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  group         ShiftGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  registrations ShiftRegistration[]
-
-  @@index([groupId])
-}
-
-model ShiftRegistration {
-  id        Int       @id @default(autoincrement())
-  slotId    Int
-  userId    Int?
-  name      String
-  email     String?
-  createdAt DateTime  @default(now())
-  slot      ShiftSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
-  user      User?     @relation(fields: [userId], references: [id])
-
-  @@unique([slotId, email])
-  @@index([slotId])
-  @@index([userId])
-}
-
-model Sponsor {
-  id         Int         @id @default(autoincrement())
-  name       String
-  logoUrl    String?
-  websiteUrl String?
-  tier       SponsorTier @default(STANDARD)
-  isActive   Boolean     @default(true)
-  sortOrder  Int         @default(0)
-}
-
-model MemberProfile {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @unique
-  firstName String
-  lastName  String
-  phone     String?
-  bio       String?
-  joinedAt  DateTime?
-  isPublic  Boolean   @default(true)
-  user      User      @relation(fields: [userId], references: [id])
-}
-
-model Tournament {
-  id                     Int              @id @default(autoincrement())
-  name                   String
-  year                   Int
-  isActive               Boolean          @default(false)
-  teamsPerPoule          Int?
-  teamsAdvancingPerPoule Int?
-  bestNthsAdvancing      Int?
-  status                 String           @default("UPCOMING")
-  createdAt              DateTime         @default(now())
-  rules                  TournamentRules?
-  poules                 Poule[]
-  teams                  Team[]
-  matches                Match[]
-  tiebreakers            Tiebreaker[]
-}
-
-model TournamentRules {
-  id           Int        @id @default(autoincrement())
-  tournamentId Int        @unique
-  description  String
-  updatedAt    DateTime   @updatedAt
-  tournament   Tournament @relation(fields: [tournamentId], references: [id])
-}
-
-model Poule {
-  id           Int        @id @default(autoincrement())
-  tournamentId Int
-  name         String
-  description  String?
-  phase        Phase      @default(GROUP)
-  tournament   Tournament @relation(fields: [tournamentId], references: [id])
-  teams        Team[]
-  matches      Match[]
-
-  @@index([tournamentId])
-}
-
-model Team {
-  id              Int            @id @default(autoincrement())
-  tournamentId    Int
-  captainId       Int?
-  pouleId         Int?
-  name            String
-  logoUrl         String?
-  isPresent       Boolean        @default(false)
-  speler1         String
-  speler2         String
-  speler3         String
-  speler4         String
-  captainName     String
-  played          Int            @default(0)
-  won             Int            @default(0)
-  drawn           Int            @default(0)
-  lost            Int            @default(0)
-  goalsFor        Int            @default(0)
-  goalsAgainst    Int            @default(0)
-  saldo           Int            @default(0)
-  points          Int            @default(0)
-  tournament      Tournament     @relation(fields: [tournamentId], references: [id])
-  captain         User?          @relation("TeamCaptain", fields: [captainId], references: [id])
-  poule           Poule?         @relation(fields: [pouleId], references: [id])
-  matchesAsTeamA  Match[]        @relation("MatchTeamA")
-  matchesAsTeamB  Match[]        @relation("MatchTeamB")
-  wonMatches      Match[]        @relation("MatchWinner")
-  tiebreakWins    Tiebreaker[]   @relation("TiebreakerWinner")
-  tiebreakEntries TiebreakTeam[] @relation("TiebreakTeamTeam")
-
-  @@index([tournamentId])
-  @@index([captainId])
-  @@index([pouleId])
-}
-
-model Match {
-  id           Int        @id @default(autoincrement())
-  tournamentId Int
-  pouleId      Int?
-  teamAId      Int?
-  teamBId      Int?
-  winnerId     Int?
-  time         DateTime   @default(now())
-  track        Int?
-  phase        Phase      @default(GROUP)
-  bracketPos   String?    @unique
-  scoreA       Int?
-  scoreB       Int?
-  tournament   Tournament @relation(fields: [tournamentId], references: [id])
-  poule        Poule?     @relation(fields: [pouleId], references: [id])
-  teamA        Team?      @relation("MatchTeamA", fields: [teamAId], references: [id])
-  teamB        Team?      @relation("MatchTeamB", fields: [teamBId], references: [id])
-  winner       Team?      @relation("MatchWinner", fields: [winnerId], references: [id])
-
-  @@index([tournamentId])
-  @@index([pouleId])
-  @@index([teamAId])
-  @@index([teamBId])
-  @@index([winnerId])
-}
-
-model Tiebreaker {
-  id           Int            @id @default(autoincrement())
-  tournamentId Int            @unique
-  winnerId     Int?
-  tournament   Tournament     @relation(fields: [tournamentId], references: [id])
-  winner       Team?          @relation("TiebreakerWinner", fields: [winnerId], references: [id])
-  teams        TiebreakTeam[]
-
-  @@index([winnerId])
-}
-
-model TiebreakTeam {
-  id         Int        @id @default(autoincrement())
-  tiebreakId Int
-  teamId     Int
-  score      Int?
-  tiebreaker Tiebreaker @relation(fields: [tiebreakId], references: [id])
-  team       Team       @relation("TiebreakTeamTeam", fields: [teamId], references: [id])
-
-  @@unique([tiebreakId, teamId])
-  @@index([tiebreakId])
-  @@index([teamId])
-}
-
-model ContactMessage {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String
-  subject   String?
-  body      String
-  status    MsgStatus @default(UNREAD)
-  createdAt DateTime  @default(now())
-  readAt    DateTime?
-}
+// --- Race Registrations ---
 
 enum RaceCategory {
   DORPELINGENKOERS
@@ -452,26 +110,498 @@ enum RegistrationStatus {
   REJECTED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+
+// =============================================================================
+// 3. AUTH & USERS
+// =============================================================================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  role      UserRole @default(MEMBER)
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Auth
+  refreshTokens RefreshToken[]
+
+  // Profile
+  memberProfile MemberProfile?
+
+  // Content authoring
+  authoredNewsPosts NewsPost[] @relation("NewsPostAuthor")
+  createdEvents     Event[]    @relation("EventCreatedBy")
+
+  // Teams
+  captainedTeams Team[] @relation("TeamCaptain")
+
+  // Events & tasks
+  attendance         Attendance[]
+  taskAssignee       TaskAssignee[]
+  shiftRegistrations ShiftRegistration[]
+
+  // Invite & registration codes
+  inviteToken            InviteToken[]
+  registrationCodes      RegistrationCode[]
+  tournamentInviteCodes  TournamentInviteCode[]
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RegistrationCode {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  role        UserRole
+  label       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  createdById Int?
+
+  creator User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+}
+
+model MemberProfile {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
+  firstName String
+  lastName  String
+  phone     String?
+  bio       String?
+  joinedAt  DateTime?
+  isPublic  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InviteToken {
+  id          Int      @id @default(autoincrement())
+  token       String   @unique
+  eventId     Int
+  isUsed      Boolean  @default(false)
+  usedAt      DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  createdById Int?
+
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  creator User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+}
+
+
+// =============================================================================
+// 4. EVENTS & SHIFTS
+// =============================================================================
+
+model Event {
+  id          Int       @id @default(autoincrement())
+  createdById Int
+  title       String
+  description String?
+  location    String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  isPublished Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  createdBy   User          @relation("EventCreatedBy", fields: [createdById], references: [id])
+  task        Task[]
+  inviteToken InviteToken[]
+  attendance  Attendance[]
+  shiftGroups ShiftGroup[]
+
+  @@index([createdById])
+}
+
+/// A named group of shift slots within an event (e.g. "Security", "Bar").
+model ShiftGroup {
+  id          Int      @id @default(autoincrement())
+  eventId     Int
+  name        String
+  description String?
+  color       String   @default("#3b82f6")
+  icon        String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  slots ShiftSlot[]
+
+  @@index([eventId])
+}
+
+model ShiftSlot {
+  id           Int      @id @default(autoincrement())
+  groupId      Int
+  title        String?
+  startAt      DateTime
+  endAt        DateTime
+  maxPersons   Int?
+  isUnlimited  Boolean  @default(false)
+  description  String?
+  location     String?
+  requiredRole String?
+  isLocked     Boolean  @default(false)
+  isClosed     Boolean  @default(false)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  group         ShiftGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  registrations ShiftRegistration[]
+
+  @@index([groupId])
+}
+
+model ShiftRegistration {
+  id        Int      @id @default(autoincrement())
+  slotId    Int
+  userId    Int?
+  name      String
+  email     String?
+  createdAt DateTime @default(now())
+
+  slot ShiftSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  user User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([slotId, userId])
+  @@unique([slotId, email])
+  @@index([slotId])
+  @@index([userId])
+}
+
+model Task {
+  id          Int        @id @default(autoincrement())
+  eventId     Int
+  title       String
+  description String?
+  shift       Shift
+  maxHelpers  Int?
+  startAt      DateTime?
+  endAt        DateTime?
+  status       TaskStatus @default(OPEN)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  event     Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignees TaskAssignee[]
+
+  @@index([eventId])
+}
+
+/// Multiple helpers per task — supports self-signup via invite link.
+model TaskAssignee {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  userId    Int?
+  name      String
+  email     String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  task Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([taskId, userId])
+  @@unique([taskId, email])
+  @@index([taskId])
+  @@index([userId])
+}
+
+/// RSVP / attendance list for an event.
+model Attendance {
+  id        Int        @id @default(autoincrement())
+  eventId   Int
+  userId    Int?
+  name      String
+  email     String?
+  status    RSVPStatus @default(NO_RESPONSE)
+  createdAt DateTime   @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, userId])
+  @@unique([eventId, email])
+  @@index([eventId])
+  @@index([userId])
+}
+
+
+// =============================================================================
+// 5. NEWS & SPONSORS
+// =============================================================================
+
+model NewsPost {
+  id          Int       @id @default(autoincrement())
+  authorId    Int
+  title       String
+  slug        String    @unique
+  body        String
+  coverUrl    String?
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  author User @relation("NewsPostAuthor", fields: [authorId], references: [id])
+
+  @@index([authorId])
+}
+
+model Sponsor {
+  id         Int         @id @default(autoincrement())
+  name       String
+  logoUrl    String?
+  websiteUrl String?
+  tier       SponsorTier @default(STANDARD)
+  isActive   Boolean     @default(true)
+  sortOrder  Int         @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+
+// =============================================================================
+// 6. TOURNAMENT
+// =============================================================================
+
+model Tournament {
+  id                     Int              @id @default(autoincrement())
+  name                   String
+  year                   Int
+  isActive               Boolean          @default(false)
+  teamsPerPoule          Int?
+  teamsAdvancingPerPoule Int?
+  bestNthsAdvancing      Int?
+  status                 TournamentStatus @default(UPCOMING)
+  rules                  String?
+  rulesUpdatedAt         DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  poules       Poule[]
+  teams        Team[]
+  matches      Match[]
+  tiebreakers  Tiebreaker[]
+  inviteCodes  TournamentInviteCode[]
+
+  @@index([isActive])
+  @@index([year])
+  @@unique([name, year])
+}
+
+model Poule {
+  id           Int    @id @default(autoincrement())
+  tournamentId Int
+  name         String
+  description  String?
+  phase        Phase  @default(GROUP_STAGE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teams      Team[]
+  matches    Match[]
+
+  @@index([tournamentId])
+}
+
+model Player {
+  id        Int     @id @default(autoincrement())
+  teamId    Int
+  name      String
+  isCaptain Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model Team {
+  id           Int     @id @default(autoincrement())
+  tournamentId Int
+  captainId    Int?
+  pouleId      Int?
+  name         String
+  logoUrl      String?
+  isPresent    Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  captain    User?      @relation("TeamCaptain", fields: [captainId], references: [id], onDelete: SetNull)
+  poule      Poule?     @relation(fields: [pouleId], references: [id])
+  players    Player[]
+
+  matchesAsTeamA  Match[]        @relation("MatchTeamA")
+  matchesAsTeamB  Match[]        @relation("MatchTeamB")
+  wonMatches      Match[]        @relation("MatchWinner")
+  tiebreakWins    Tiebreaker[]   @relation("TiebreakerWinner")
+  tiebreakEntries TiebreakerTeam[] @relation("TiebreakerTeamTeam")
+  inviteCode      TournamentInviteCode? @relation("TeamInviteCode")
+
+  @@index([tournamentId])
+  @@index([captainId])
+  @@index([pouleId])
+  @@unique([tournamentId, name])
+}
+
+model Match {
+  id           Int      @id @default(autoincrement())
+  tournamentId Int
+  pouleId      Int?
+  teamAId      Int?
+  teamBId      Int?
+  winnerId     Int?
+  scheduledAt  DateTime?
+  track        Int?
+  phase        Phase    @default(GROUP_STAGE)
+  bracketPos   String?  @unique
+  scoreA       Int?
+  scoreB       Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  poule      Poule?     @relation(fields: [pouleId], references: [id], onDelete: SetNull)
+  teamA      Team?      @relation("MatchTeamA", fields: [teamAId], references: [id], onDelete: SetNull)
+  teamB      Team?      @relation("MatchTeamB", fields: [teamBId], references: [id], onDelete: SetNull)
+  winner     Team?      @relation("MatchWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId])
+  @@index([pouleId])
+  @@index([teamAId])
+  @@index([teamBId])
+  @@index([winnerId])
+}
+
+model Tiebreaker {
+  id           Int  @id @default(autoincrement())
+  tournamentId Int  @unique
+  winnerId     Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tournament Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  winner     Team?          @relation("TiebreakerWinner", fields: [winnerId], references: [id])
+  teams      TiebreakerTeam[]
+
+  @@index([winnerId])
+}
+
+model TiebreakerTeam {
+  id           Int  @id @default(autoincrement())
+  tiebreakerId Int
+  teamId       Int
+  score        Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tiebreaker Tiebreaker @relation(fields: [tiebreakerId], references: [id], onDelete: Cascade)
+  team       Team       @relation("TiebreakerTeamTeam", fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([tiebreakerId, teamId])
+  @@index([tiebreakerId])
+  @@index([teamId])
+}
+
+/// Single-use code that lets a team captain register their team in a tournament.
+model TournamentInviteCode {
+  id           Int      @id @default(autoincrement())
+  tournamentId Int
+  code         String   @unique
+  label        String?
+  isUsed       Boolean  @default(false)
+  usedByTeamId Int?     @unique
+  createdById  Int?
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  usedByTeam Team?      @relation("TeamInviteCode", fields: [usedByTeamId], references: [id], onDelete: SetNull)
+  creator    User?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId])
+  @@index([createdById])
+}
+
+
+// =============================================================================
+// 7. RACE REGISTRATIONS
+// =============================================================================
+
 model Registration {
   id                     Int                @id @default(autoincrement())
-  timestamp              DateTime           @default(now())
   firstName              String
   lastName               String
-  dateOfBirth            String?
-  gender                 String
+  dateOfBirth            DateTime?
+  gender                 Gender
   address                String
-  nationalRegisterNumber String
+  nationalRegisterNumber String @unique
   email                  String
   phone                  String
-  wielerclub             String?
+  cyclingClub            String?
   raceCategory           RaceCategory
   status                 RegistrationStatus @default(PENDING)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@index([status])
+  @@index([raceCategory])
+  @@index([email])
 }
 
 model RegistrationSettings {
-  id                    Int      @id
+  id                    Int      @id @default(1)
   isOpen                Boolean  @default(true)
   dorpelingenkoersLimit Int?
   funWedstrijdLimit     Int?
+  createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+}
+
+
+// =============================================================================
+// 8. MISCELLANEOUS
+// =============================================================================
+
+model ContactMessage {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String
+  subject   String?
+  body      String
+  status    MessageStatus @default(UNREAD)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  readAt    DateTime?
 }

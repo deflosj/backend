@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { UserRole } from "@prisma/client";
+import { ROLE_MANAGER, type RoleAccessKey } from "../config/roleManager";
 import { HttpError } from "../utils/httpError";
 
 export const requireRole = (...allowedRoles: UserRole[]) => {
@@ -9,8 +10,6 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
       return;
     }
 
-    console.log("Authenticated user role:", req.authUser.role);
-    console.log("Allowed roles for this route:", allowedRoles);
     if (!allowedRoles.includes(req.authUser.role)) {
       next(new HttpError(403, "Insufficient permissions"));
       return;
@@ -19,3 +18,6 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
     next();
   };
 };
+
+export const requireAccess = (accessKey: RoleAccessKey): ReturnType<typeof requireRole> =>
+  requireRole(...ROLE_MANAGER[accessKey].roles);
