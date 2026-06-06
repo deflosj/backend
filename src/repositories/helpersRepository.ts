@@ -1,9 +1,9 @@
 import prisma from "../database/prisma";
 import { TaskStatus, RSVPStatus, Shift } from "@prisma/client";
+import { toCsvRow } from "../utils/csv";
 
 const TASK_INCLUDE = {
-  assignedTo: { select: { id: true, username: true, email: true } },
-  assignees: { select: { id: true, name: true, email: true, userId: true }, orderBy: { createdAt: "asc" as const } },
+  assignees: { select: { id: true, name: true, email: true, userId: true, isPrimary: true }, orderBy: { createdAt: "asc" as const } },
 };
 
 export const listTasksByEvent = async (eventId: number) =>
@@ -29,16 +29,12 @@ export const updateTask = async (
     shift: Shift;
     startAt: Date | null;
     endAt: Date | null;
-    assignedToId: number | null;
     status: TaskStatus;
     maxHelpers: number | null;
-  }>  
+  }>
 ) => prisma.task.update({ where: { id: taskId }, data });
 
 export const deleteTask = async (taskId: number) => prisma.task.delete({ where: { id: taskId } });
-
-export const assignTask = async (taskId: number, userId: number | null) =>
-  prisma.task.update({ where: { id: taskId }, data: { assignedToId: userId } });
 
 export const updateTaskStatus = async (taskId: number, status: TaskStatus) =>
   prisma.task.update({ where: { id: taskId }, data: { status } });
@@ -64,13 +60,23 @@ export const removeTaskAssigneeByUser = async (taskId: number, userId: number) =
 export const removeTaskAssigneeByEmail = async (taskId: number, email: string) =>
   prisma.taskAssignee.deleteMany({ where: { taskId, email } });
 
+export const findTaskAssigneeById = async (assigneeId: number) =>
+  prisma.taskAssignee.findUnique({
+    where: { id: assigneeId },
+    include: { task: { select: { id: true, eventId: true } } },
+  });
+
 export const removeTaskAssigneeById = async (assigneeId: number) =>
   prisma.taskAssignee.delete({ where: { id: assigneeId } });
 
 // ── Invite tokens ──────────────────────────────────────────────────────────────
 
-export const createInviteToken = async (eventId: number, token: string, createdBy?: number) =>
-  prisma.inviteToken.create({ data: { eventId, token, createdBy } });
+export const createInviteToken = async (
+  eventId: number,
+  token: string,
+  createdBy: number | undefined,
+  expiresAt: Date
+) => prisma.inviteToken.create({ data: { eventId, token, createdById: createdBy, expiresAt } });
 
 export const findInviteToken = async (token: string) =>
   prisma.inviteToken.findUnique({ where: { token }, include: { event: true } });
@@ -99,19 +105,48 @@ export const updateAttendanceRsvp = async (id: number, status: RSVPStatus) =>
 
 export const deleteAttendance = async (id: number) => prisma.attendance.delete({ where: { id } });
 
-export const findOrCreateUserByEmail = async (email: string, name?: string) => {
-  if (!email) return null;
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) return existing;
-  const username = name ? name.replace(/\s+/g, "_").toLowerCase() : email.split("@")[0];
-  return prisma.user.create({ data: { email, username, password: "", isActive: false } });
-};
-
 export const exportAttendanceCsv = async (eventId: number) => {
   const rows = await listAttendance(eventId);
-  const header = ["name", "email", "status"].join(",");
-  const lines = rows.map((r) => [r.name, r.email ?? "", r.status].join(","));
+  const header = toCsvRow(["name", "email", "status"]);
+  const lines = rows.map((r) => toCsvRow([r.name, r.email ?? "", r.status]));
   return [header, ...lines].join("\n");
+};
+
+// ── Import volunteers from tasks in a given year into an event's attendance ──
+export const importVolunteersForYear = async (targetEventId: number, year?: number) => {
+  const y = year ?? new Date().getFullYear();
+  const start = new Date(Date.UTC(y, 0, 1));
+  const end = new Date(Date.UTC(y + 1, 0, 1));
+
+  const assignees = await prisma.taskAssignee.findMany({
+    where: { task: { event: { startsAt: { gte: start, lt: end } } } },
+    include: { user: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const seen = new Map<string, typeof assignees[0]>();
+  for (const a of assignees) {
+    const key = a.email ? a.email.toLowerCase() : a.userId ? `user:${a.userId}` : `name:${a.name.toLowerCase()}`;
+    if (!seen.has(key)) seen.set(key, a);
+  }
+
+  const added: { name: string; email?: string | null; userId?: number | null }[] = [];
+  for (const a of seen.values()) {
+    await prisma.attendance.upsert({
+      where: { eventId_email: { eventId: targetEventId, email: a.email ?? "" } },
+      create: {
+        eventId: targetEventId,
+        name: a.name,
+        email: a.email,
+        userId: a.userId ?? undefined,
+        status: RSVPStatus.NO_RESPONSE,
+      },
+      update: { name: a.name, userId: a.userId ?? undefined },
+    });
+    added.push({ name: a.name, email: a.email ?? null, userId: a.userId ?? null });
+  }
+
+  return { imported: added.length, rows: added };
 };
 
 export const getEventTaskStats = async (eventId: number) => {

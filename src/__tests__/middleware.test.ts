@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { requireAuth } from "../middleware/auth";
-import { requireRole } from "../middleware/authorizeRole";
+import { requireAccess, requireRole } from "../middleware/authorizeRole";
 import { errorHandler, notFoundHandler, requestLogger } from "../middleware/errorHandler";
 import config from "../config";
 import { HttpError } from "../utils/httpError";
@@ -194,6 +194,51 @@ describe("requireRole middleware", () => {
   });
 });
 
+describe("requireAccess middleware", () => {
+  let req: Partial<Request>;
+  let res: Partial<Response>;
+  let next: jest.Mock;
+
+  beforeEach(() => {
+    req = {};
+    res = {};
+    next = jest.fn();
+  });
+
+  it("reuses the configured role set for a named access group", () => {
+    req.authUser = {
+      id: 1,
+      email: "admin@example.com",
+      username: "admin",
+      role: "ADMIN",
+    };
+
+    const middleware = requireAccess("manageContent");
+    middleware(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it("rejects a role that is not part of the access group", () => {
+    req.authUser = {
+      id: 1,
+      email: "member@example.com",
+      username: "member",
+      role: "MEMBER",
+    };
+
+    const middleware = requireAccess("manageTournamentOperations");
+    middleware(req as Request, res as Response, next);
+
+    expect(next).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 403,
+        message: "Insufficient permissions",
+      })
+    );
+  });
+});
+
 describe("errorHandler middleware", () => {
   let req: Partial<Request>;
   let res: Partial<Response> & { status: jest.Mock; json: jest.Mock };
@@ -335,6 +380,30 @@ describe("requestLogger middleware", () => {
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("GET /api/users"),
       expect.any(Object)
+    );
+  });
+
+  it("omits sensitive query parameters from debug output", () => {
+    req = {
+      method: "GET",
+      path: "/api/invite",
+      query: {
+        token: "secret-token",
+        email: "member@example.com",
+        password: "hunter2",
+        page: "1",
+      },
+      params: { id: "42" },
+    };
+
+    requestLogger(req as Request, res as Response, next);
+
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("GET /api/invite"),
+      expect.objectContaining({
+        query: { page: "1" },
+        params: { id: "42" },
+      })
     );
   });
 });

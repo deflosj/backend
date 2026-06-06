@@ -6,7 +6,6 @@ import {
   createRegistrationCode,
   listRegistrationCodes,
   toggleRegistrationCode,
-  incrementUsedCount,
   deleteRegistrationCode,
 } from "../repositories/registrationCodeRepository";
 
@@ -27,8 +26,8 @@ export const validateCode = async (code: string): Promise<RegistrationCode> => {
   return record;
 };
 
-export const consumeCode = async (id: number): Promise<void> => {
-  await incrementUsedCount(id);
+export const consumeCode = async (_id: number): Promise<void> => {
+  // usedCount field removed from schema; no-op retained for API compatibility
 };
 
 export const createInviteCode = async (

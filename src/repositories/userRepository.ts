@@ -1,6 +1,16 @@
 import { User, UserRole } from "@prisma/client";
 import prisma from "../database/prisma";
 
+export interface PublicUser {
+  id: number;
+  email: string;
+  username: string;
+  role: UserRole;
+  avatarUrl: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface CreateUserInput {
   email: string;
   username: string;
@@ -66,7 +76,7 @@ export const findAdmins = async (): Promise<User[]> => {
   return findUsersByRoles([UserRole.ADMIN, UserRole.SUPERADMIN]);
 };
 
-export const findAllUsers = async (): Promise<Partial<User>[]> => {
+export const findAllUsers = async (): Promise<PublicUser[]> => {
   return prisma.user.findMany({
     select: {
       id: true,
@@ -74,10 +84,25 @@ export const findAllUsers = async (): Promise<Partial<User>[]> => {
       username: true,
       role: true,
       avatarUrl: true,
-      isActive: true,
       createdAt: true,
       updatedAt: true,
     },
     orderBy: { username: "asc" },
   });
+};
+
+export const findOrCreateUserByEmail = async (email: string, name?: string): Promise<User | null> => {
+  if (!email) return null;
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return existing;
+  const username = name ? name.replace(/\s+/g, "_").toLowerCase() : email.split("@")[0];
+  return prisma.user.create({ data: { email, username, password: "" } });
+};
+
+export const updateUserRole = async (userId: number, role: UserRole): Promise<User> => {
+  return prisma.user.update({ where: { id: userId }, data: { role } });
+};
+
+export const updateUserPassword = async (userId: number, hashedPassword: string): Promise<void> => {
+  await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
 };

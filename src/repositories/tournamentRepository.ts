@@ -1,4 +1,4 @@
-import { Match, Phase, Poule, Team, Tiebreaker, TiebreakTeam, Tournament, TournamentRules } from "@prisma/client";
+import { Match, Phase, Player, Poule, Team, Tiebreaker, TiebreakerTeam, Tournament, TournamentStatus } from "@prisma/client";
 import prisma from "../database/prisma";
 
 // ── Tournament ────────────────────────────────────────────────────────────────
@@ -9,22 +9,22 @@ export interface TournamentData {
   teamsPerPoule?: number | null;
   teamsAdvancingPerPoule?: number | null;
   bestNthsAdvancing?: number | null;
-  status?: "UPCOMING" | "ONGOING" | "COMPLETED";
+  status?: TournamentStatus;
 }
 
 export const findAllTournaments = (): Promise<Tournament[]> =>
   prisma.tournament.findMany({ orderBy: { year: "desc" } });
 
-export const findTournamentById = (id: number): Promise<(Tournament & { rules: TournamentRules | null; poules: Poule[]; teams: Team[]; matches: Match[] }) | null> =>
+export const findTournamentById = (id: number): Promise<(Tournament & { poules: Poule[]; teams: Team[]; matches: Match[] }) | null> =>
   prisma.tournament.findUnique({
     where: { id },
-    include: { rules: true, poules: true, teams: true, matches: true },
+    include: { poules: true, teams: true, matches: true },
   });
 
-export const findActiveTournament = (): Promise<(Tournament & { rules: TournamentRules | null; poules: Poule[]; teams: Team[]; matches: Match[] }) | null> =>
+export const findActiveTournament = (): Promise<(Tournament & { poules: Poule[]; teams: Team[]; matches: Match[] }) | null> =>
   prisma.tournament.findFirst({
     where: { isActive: true },
-    include: { rules: true, poules: true, teams: true, matches: true },
+    include: { poules: true, teams: true, matches: true },
   });
 
 export const createTournament = (data: TournamentData): Promise<Tournament> =>
@@ -38,17 +38,16 @@ export const deleteTournament = (id: number): Promise<Tournament> =>
 
 export const activateTournament = (id: number): Promise<Tournament> =>
   prisma.$transaction(async (tx) => {
-    await tx.tournament.updateMany({ where: { isActive: true }, data: { isActive: false, status: "COMPLETED" } });
-    return tx.tournament.update({ where: { id }, data: { isActive: true, status: "ONGOING" } });
+    await tx.tournament.updateMany({ where: { isActive: true }, data: { isActive: false, status: TournamentStatus.COMPLETED } });
+    return tx.tournament.update({ where: { id }, data: { isActive: true, status: TournamentStatus.ONGOING } });
   });
 
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
-export const upsertTournamentRules = (tournamentId: number, description: string): Promise<TournamentRules> =>
-  prisma.tournamentRules.upsert({
-    where: { tournamentId },
-    create: { tournamentId, description },
-    update: { description },
+export const updateTournamentRules = (tournamentId: number, rules: string): Promise<Tournament> =>
+  prisma.tournament.update({
+    where: { id: tournamentId },
+    data: { rules, rulesUpdatedAt: new Date() },
   });
 
 // ── Poules ────────────────────────────────────────────────────────────────────
@@ -59,15 +58,15 @@ export interface PouleData {
   phase?: Phase;
 }
 
-export const findPoulesByTournament = (tournamentId: number): Promise<(Poule & { teams: Team[] })[]> =>
+export const findPoulesByTournament = (tournamentId: number): Promise<(Poule & { teams: TeamWithPlayers[] })[]> =>
   prisma.poule.findMany({
     where: { tournamentId },
-    include: { teams: true },
+    include: { teams: { include: { players: true } } },
     orderBy: { name: "asc" },
   });
 
-export const findPouleById = (id: number): Promise<(Poule & { teams: Team[] }) | null> =>
-  prisma.poule.findUnique({ where: { id }, include: { teams: true } });
+export const findPouleById = (id: number): Promise<(Poule & { teams: TeamWithPlayers[] }) | null> =>
+  prisma.poule.findUnique({ where: { id }, include: { teams: { include: { players: true } } } });
 
 export const createPoule = (tournamentId: number, data: PouleData): Promise<Poule> =>
   prisma.poule.create({ data: { tournamentId, ...data } });
@@ -80,35 +79,60 @@ export const deletePoule = (id: number): Promise<Poule> =>
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
+export type TeamWithPlayers = Team & { players: Player[] };
+
+export interface PlayerInput {
+  name: string;
+  isCaptain?: boolean;
+}
+
 export interface TeamData {
   name: string;
   logoUrl?: string | null;
   pouleId?: number | null;
   captainId?: number | null;
-  captainName: string;
-  speler1: string;
-  speler2: string;
-  speler3: string;
-  speler4: string;
+  players: PlayerInput[];
 }
 
-export const findTeamsByTournament = (tournamentId: number): Promise<Team[]> =>
-  prisma.team.findMany({ where: { tournamentId }, orderBy: { name: "asc" } });
+export const findTeamsByTournament = (tournamentId: number): Promise<TeamWithPlayers[]> =>
+  prisma.team.findMany({ where: { tournamentId }, include: { players: true }, orderBy: { name: "asc" } });
 
-export const findTeamById = (id: number): Promise<Team | null> =>
-  prisma.team.findUnique({ where: { id } });
+export const findTeamById = (id: number): Promise<TeamWithPlayers | null> =>
+  prisma.team.findUnique({ where: { id }, include: { players: true } });
 
-export const createTeam = (tournamentId: number, data: TeamData): Promise<Team> =>
-  prisma.team.create({ data: { tournamentId, ...data } });
+export const createTeam = (tournamentId: number, data: TeamData): Promise<TeamWithPlayers> =>
+  prisma.team.create({
+    data: {
+      tournamentId,
+      name: data.name,
+      logoUrl: data.logoUrl,
+      pouleId: data.pouleId,
+      captainId: data.captainId,
+      players: { create: data.players },
+    },
+    include: { players: true },
+  });
 
-export const updateTeam = (id: number, data: Partial<TeamData>): Promise<Team> =>
-  prisma.team.update({ where: { id }, data });
+export const updateTeam = (id: number, data: Partial<TeamData>): Promise<TeamWithPlayers> => {
+  const { players, ...rest } = data;
+  if (players !== undefined) {
+    return prisma.$transaction(async (tx) => {
+      await tx.player.deleteMany({ where: { teamId: id } });
+      return tx.team.update({
+        where: { id },
+        data: { ...rest, players: { create: players } },
+        include: { players: true },
+      });
+    });
+  }
+  return prisma.team.update({ where: { id }, data: rest, include: { players: true } });
+};
 
 export const deleteTeam = (id: number): Promise<Team> =>
   prisma.team.delete({ where: { id } });
 
-export const checkInTeam = (id: number, isPresent: boolean): Promise<Team> =>
-  prisma.team.update({ where: { id }, data: { isPresent } });
+export const checkInTeam = (id: number, isPresent: boolean): Promise<TeamWithPlayers> =>
+  prisma.team.update({ where: { id }, data: { isPresent }, include: { players: true } });
 
 // ── Matches ───────────────────────────────────────────────────────────────────
 
@@ -116,7 +140,7 @@ export interface MatchData {
   pouleId?: number | null;
   teamAId?: number | null;
   teamBId?: number | null;
-  time?: Date;
+  scheduledAt?: Date;
   track?: number | null;
   phase?: Phase;
   bracketPos?: string | null;
@@ -128,7 +152,7 @@ export const findMatchesByTournament = (
 ): Promise<Match[]> =>
   prisma.match.findMany({
     where: { tournamentId, ...filters },
-    orderBy: [{ phase: "asc" }, { time: "asc" }],
+    orderBy: [{ phase: "asc" }, { scheduledAt: "asc" }],
   });
 
 export const findMatchById = (id: number): Promise<Match | null> =>
@@ -143,99 +167,25 @@ export const updateMatch = (id: number, data: Partial<MatchData>): Promise<Match
 export const deleteMatch = (id: number): Promise<Match> =>
   prisma.match.delete({ where: { id } });
 
-export const scoreMatch = (matchId: number, scoreA: number, scoreB: number): Promise<Match> =>
-  prisma.$transaction(async (tx) => {
-    const match = await tx.match.findUniqueOrThrow({ where: { id: matchId } });
+export const scoreMatch = async (matchId: number, scoreA: number, scoreB: number): Promise<Match> => {
+  const match = await prisma.match.findUniqueOrThrow({ where: { id: matchId } });
 
-    // Undo previous stats if match was already scored
-    if (match.scoreA !== null && match.scoreB !== null) {
-      const oldScoreA = match.scoreA;
-      const oldScoreB = match.scoreB;
+  let winnerId: number | null = null;
+  if (scoreA > scoreB) winnerId = match.teamAId ?? null;
+  else if (scoreB > scoreA) winnerId = match.teamBId ?? null;
 
-      if (match.teamAId) {
-        const undo = buildStatsUndo(oldScoreA, oldScoreB);
-        await tx.team.update({ where: { id: match.teamAId }, data: undo });
-      }
-      if (match.teamBId) {
-        const undo = buildStatsUndo(oldScoreB, oldScoreA);
-        await tx.team.update({ where: { id: match.teamBId }, data: undo });
-      }
-    }
-
-    // Determine winner
-    let winnerId: number | null = null;
-    if (scoreA > scoreB) winnerId = match.teamAId ?? null;
-    else if (scoreB > scoreA) winnerId = match.teamBId ?? null;
-
-    // Apply new stats
-    if (match.teamAId) {
-      await tx.team.update({
-        where: { id: match.teamAId },
-        data: buildStatsApply(scoreA, scoreB),
-      });
-    }
-    if (match.teamBId) {
-      await tx.team.update({
-        where: { id: match.teamBId },
-        data: buildStatsApply(scoreB, scoreA),
-      });
-    }
-
-    return tx.match.update({
-      where: { id: matchId },
-      data: { scoreA, scoreB, winnerId },
-    });
-  });
-
-function pointsFor(isWin: boolean, isDraw: boolean): number {
-  if (isWin) return 3;
-  if (isDraw) return 1;
-  return 0;
-}
-
-function buildStatsUndo(myScore: number, oppScore: number) {
-  const isWin = myScore > oppScore;
-  const isDraw = myScore === oppScore;
-  const isLoss = !isWin && !isDraw;
-
-  return {
-    played: { decrement: 1 },
-    goalsFor: { decrement: myScore },
-    goalsAgainst: { decrement: oppScore },
-    saldo: { decrement: myScore - oppScore },
-    won: isWin ? { decrement: 1 } : { increment: 0 },
-    drawn: isDraw ? { decrement: 1 } : { increment: 0 },
-    lost: isLoss ? { decrement: 1 } : { increment: 0 },
-    points: { decrement: pointsFor(isWin, isDraw) },
-  };
-}
-
-function buildStatsApply(myScore: number, oppScore: number) {
-  const isWin = myScore > oppScore;
-  const isDraw = myScore === oppScore;
-  const isLoss = !isWin && !isDraw;
-
-  return {
-    played: { increment: 1 },
-    goalsFor: { increment: myScore },
-    goalsAgainst: { increment: oppScore },
-    saldo: { increment: myScore - oppScore },
-    won: isWin ? { increment: 1 } : { decrement: 0 },
-    drawn: isDraw ? { increment: 1 } : { decrement: 0 },
-    lost: isLoss ? { increment: 1 } : { decrement: 0 },
-    points: { increment: pointsFor(isWin, isDraw) },
-  };
-}
+  return prisma.match.update({ where: { id: matchId }, data: { scoreA, scoreB, winnerId } });
+};
 
 // ── Tiebreaker ────────────────────────────────────────────────────────────────
 
-export const findTiebreakerByTournament = (tournamentId: number): Promise<(Tiebreaker & { teams: TiebreakTeam[] }) | null> =>
+export const findTiebreakerByTournament = (tournamentId: number): Promise<(Tiebreaker & { teams: TiebreakerTeam[] }) | null> =>
   prisma.tiebreaker.findUnique({
     where: { tournamentId },
     include: { teams: true },
   });
 
-export const upsertTiebreaker = async (tournamentId: number, teamIds: number[]): Promise<Tiebreaker & { teams: TiebreakTeam[] }> =>
+export const upsertTiebreaker = async (tournamentId: number, teamIds: number[]): Promise<Tiebreaker & { teams: TiebreakerTeam[] }> =>
   prisma.$transaction(async (tx) => {
     const tiebreaker = await tx.tiebreaker.upsert({
       where: { tournamentId },
@@ -244,9 +194,9 @@ export const upsertTiebreaker = async (tournamentId: number, teamIds: number[]):
     });
 
     // Replace team entries
-    await tx.tiebreakTeam.deleteMany({ where: { tiebreakId: tiebreaker.id } });
-    await tx.tiebreakTeam.createMany({
-      data: teamIds.map((teamId) => ({ tiebreakId: tiebreaker.id, teamId })),
+    await tx.tiebreakerTeam.deleteMany({ where: { tiebreakerId: tiebreaker.id } });
+    await tx.tiebreakerTeam.createMany({
+      data: teamIds.map((teamId) => ({ tiebreakerId: tiebreaker.id, teamId })),
     });
 
     return tx.tiebreaker.findUniqueOrThrow({
@@ -258,9 +208,9 @@ export const upsertTiebreaker = async (tournamentId: number, teamIds: number[]):
 export const setTiebreakerWinner = (tournamentId: number, winnerId: number): Promise<Tiebreaker> =>
   prisma.tiebreaker.update({ where: { tournamentId }, data: { winnerId } });
 
-export const setTiebreakerScore = (tiebreakId: number, teamId: number, score: number): Promise<TiebreakTeam> =>
-  prisma.tiebreakTeam.update({
-    where: { tiebreakId_teamId: { tiebreakId, teamId } },
+export const setTiebreakerScore = (tiebreakerId: number, teamId: number, score: number): Promise<TiebreakerTeam> =>
+  prisma.tiebreakerTeam.update({
+    where: { tiebreakerId_teamId: { tiebreakerId, teamId } },
     data: { score },
   });
 
@@ -268,15 +218,15 @@ export const setTiebreakerScore = (tiebreakId: number, teamId: number, score: nu
 
 export const findPoulesWithTeams = (tournamentId: number) =>
   prisma.poule.findMany({
-    where: { tournamentId, phase: "GROUP" },
-    include: { teams: { orderBy: { id: "asc" } } },
+    where: { tournamentId, phase: "GROUP_STAGE" },
+    include: { teams: { include: { players: true }, orderBy: { id: "asc" } } },
     orderBy: { name: "asc" },
   });
 
 export const deleteGroupMatchesByTournament = (tournamentId: number) =>
-  prisma.match.deleteMany({ where: { tournamentId, phase: "GROUP" } });
+  prisma.match.deleteMany({ where: { tournamentId, phase: "GROUP_STAGE" } });
 
-export const bulkCreateMatches = (matches: Array<{ tournamentId: number; pouleId: number | null; teamAId: number | null; teamBId: number | null; time: Date; track: number | null; phase: Phase; bracketPos: string | null }>) =>
+export const bulkCreateMatches = (matches: Array<{ tournamentId: number; pouleId: number | null; teamAId: number | null; teamBId: number | null; scheduledAt: Date; track: number | null; phase: Phase; bracketPos: string | null }>) =>
   prisma.match.createMany({ data: matches });
 
 // ── Delay ────────────────────────────────────────────────────────────────────
@@ -284,7 +234,7 @@ export const bulkCreateMatches = (matches: Array<{ tournamentId: number; pouleId
 export const shiftFutureMatchTimes = async (tournamentId: number, minutes: number): Promise<number> => {
   const result = await prisma.$executeRaw`
     UPDATE "Match"
-    SET time = time + (${minutes} * INTERVAL '1 minute')
+    SET "scheduledAt" = "scheduledAt" + (${minutes} * INTERVAL '1 minute')
     WHERE "tournamentId" = ${tournamentId}
   `;
   return result;
@@ -292,13 +242,61 @@ export const shiftFutureMatchTimes = async (tournamentId: number, minutes: numbe
 
 // ── Standings ────────────────────────────────────────────────────────────────
 
-export const findTeamsByPoule = (pouleId: number): Promise<Team[]> =>
-  prisma.team.findMany({
-    where: { pouleId },
-    orderBy: [{ points: "desc" }, { saldo: "desc" }, { goalsFor: "desc" }, { name: "asc" }],
-  });
+export interface TeamStats {
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  saldo: number;
+  points: number;
+}
+
+export type TeamStanding = Team & TeamStats;
+
+export const findTeamsByPoule = async (pouleId: number): Promise<TeamStanding[]> => {
+  const [teams, matches] = await Promise.all([
+    prisma.team.findMany({ where: { pouleId } }),
+    prisma.match.findMany({ where: { pouleId, scoreA: { not: null }, scoreB: { not: null } } }),
+  ]);
+
+  const statsMap = new Map<number, TeamStats>(
+    teams.map((t) => [t.id, { played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0 }])
+  );
+
+  for (const m of matches) {
+    const { teamAId, teamBId, scoreA, scoreB } = m;
+    if (scoreA === null || scoreB === null) continue;
+    if (teamAId) applyMatchToStats(statsMap, teamAId, scoreA, scoreB);
+    if (teamBId) applyMatchToStats(statsMap, teamBId, scoreB, scoreA);
+  }
+
+  const zero = (): TeamStats => ({ played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0 });
+
+  return teams
+    .map((t) => ({ ...t, ...(statsMap.get(t.id) ?? zero()) }))
+    .sort((a, b) =>
+      b.points - a.points ||
+      b.saldo - a.saldo ||
+      b.goalsFor - a.goalsFor ||
+      a.name.localeCompare(b.name)
+    );
+};
+
+function applyMatchToStats(map: Map<number, TeamStats>, teamId: number, myScore: number, oppScore: number) {
+  const s = map.get(teamId);
+  if (!s) return;
+  s.played++;
+  s.goalsFor += myScore;
+  s.goalsAgainst += oppScore;
+  s.saldo += myScore - oppScore;
+  if (myScore > oppScore) { s.won++; s.points += 3; }
+  else if (myScore === oppScore) { s.drawn++; s.points += 1; }
+  else { s.lost++; }
+}
 
 export const deleteKnockoutMatches = (tournamentId: number) =>
   prisma.match.deleteMany({
-    where: { tournamentId, phase: { not: "GROUP" } },
+    where: { tournamentId, phase: { not: "GROUP_STAGE" } },
   });

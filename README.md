@@ -105,6 +105,9 @@ Environment variables are loaded from `.env`. See `.env.example` for all availab
 - `GET /api/health` - Health check with API prefix
 - `GET /api/ready` - Readiness check with API prefix
 
+### Role Matrix
+- `GET /api/roles` - Returns the centralized permission matrix for admin users
+
 Response example:
 ```json
 {

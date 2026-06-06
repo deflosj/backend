@@ -1,20 +1,54 @@
 import express, { Request, Response, NextFunction } from "express";
-import { requireAuth } from "../middleware/auth";
-import { RSVPStatus, TaskStatus, Shift } from "@prisma/client";
-import * as repo from "../repositories/helpersRepository";
-import { v4 as uuidv4 } from "uuid";
- 
+import { z } from "zod";
+import { requireAuth, optionalAuth } from "../middleware/auth";
+import { requireAccess } from "../middleware/authorizeRole";
+import { HttpError } from "../utils/httpError";
+import { RSVPStatus, Shift, TaskStatus } from "@prisma/client";
+import * as service from "../services/helpers.service";
+import type { TaskPatch } from "../services/helpers.service";
+import { validate } from "../utils/validate";
+
 const router = express.Router();
+
+const portalTokenParamsSchema = z.object({
+  token: z.string().min(1, { message: "Token is verplicht" }),
+});
+
+const portalEventParamsSchema = z.object({
+  id: z.coerce.number().int().positive({ message: "Invalid event id" }),
+});
+
+const portalTaskParamsSchema = z.object({
+  id: z.coerce.number().int().positive({ message: "Invalid event id" }),
+  taskId: z.coerce.number().int().positive({ message: "Invalid task id" }),
+});
+
+const portalTaskAssigneeParamsSchema = z.object({
+  id: z.coerce.number().int().positive({ message: "Invalid event id" }),
+  taskId: z.coerce.number().int().positive({ message: "Invalid task id" }),
+  assigneeId: z.coerce.number().int().positive({ message: "Invalid assignee id" }),
+});
+
+const portalAttendanceParamsSchema = z.object({
+  id: z.coerce.number().int().positive({ message: "Invalid event id" }),
+  aid: z.coerce.number().int().positive({ message: "Invalid attendance id" }),
+});
+
+const portalClaimQuerySchema = z.object({
+  token: z.string().min(1).optional(),
+});
+
+const portalYearQuerySchema = z.object({
+  year: z.coerce.number().int().positive().optional(),
+});
 
 // ── Public invite token lookup ─────────────────────────────────────────────
 router.get(
   "/portal/invite/:token",
+  validate({ params: portalTokenParamsSchema }),
   async (req: Request<{ token: string }>, res: Response, next: NextFunction) => {
     try {
-      const invite = await repo.findInviteToken(req.params.token);
-      if (!invite) return res.status(404).json({ error: "Ongeldige of verlopen uitnodigingslink" });
-      const tasks = await repo.listTasksByEvent(invite.eventId);
-      return res.json({ event: invite.event, tasks });
+      return res.json(await service.getInviteWithTasks(req.params.token));
     } catch (err) {
       return next(err);
     }
@@ -24,11 +58,10 @@ router.get(
 // ── Task stats ─────────────────────────────────────────────────────────────
 router.get(
   "/:id/portal/stats",
+  validate({ params: portalEventParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
-      const eventId = Number.parseInt(req.params.id, 10);
-      const stats = await repo.getEventTaskStats(eventId);
-      return res.json(stats);
+      return res.json(await service.getEventTaskStats(Number.parseInt(req.params.id, 10)));
     } catch (err) {
       return next(err);
     }
@@ -38,11 +71,10 @@ router.get(
 // ── List tasks ─────────────────────────────────────────────────────────────
 router.get(
   "/:id/portal/tasks",
+  validate({ params: portalEventParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
-      const eventId = Number.parseInt(req.params.id, 10);
-      const tasks = await repo.listTasksByEvent(eventId);
-      return res.json(tasks);
+      return res.json(await service.listTasks(Number.parseInt(req.params.id, 10)));
     } catch (err) {
       return next(err);
     }
@@ -53,6 +85,8 @@ router.get(
 router.post(
   "/:id/portal/tasks",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalEventParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
       const eventId = Number.parseInt(req.params.id, 10);
@@ -64,11 +98,11 @@ router.post(
         endAt?: string;
         maxHelpers?: number | null;
       };
-      if (!title || !shift) return res.status(400).json({ error: "Titel en shift zijn verplicht" });
+      if (!title || !shift) return next(new HttpError(400, "Titel en shift zijn verplicht"));
       if (!Object.values(Shift).includes(shift as Shift))
-        return res.status(400).json({ error: "Ongeldige shift" });
+        return next(new HttpError(400, "Ongeldige shift"));
 
-      await repo.createTask(eventId, {
+      const full = await service.createTask(eventId, {
         title,
         description,
         shift: shift as Shift,
@@ -76,8 +110,6 @@ router.post(
         endAt: endAt ? new Date(endAt) : undefined,
         maxHelpers: maxHelpers ?? null,
       });
-
-      const full = await repo.listTasksByEvent(eventId);
       return res.status(201).json(full);
     } catch (err) {
       return next(err);
@@ -89,27 +121,25 @@ router.post(
 router.patch(
   "/:id/portal/tasks/:taskId",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalTaskParamsSchema }),
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
     try {
       const taskId = Number.parseInt(req.params.taskId, 10);
+      const eventId = Number.parseInt(req.params.id, 10);
       const { title, description, shift, startAt, endAt, status, maxHelpers } =
         req.body as Record<string, string | number | null | undefined>;
 
-      type TaskPatch = Parameters<typeof repo.updateTask>[1];
       const data: TaskPatch = {};
       if (title !== undefined) data.title = title as string;
       if (description !== undefined) data.description = (description as string) || null;
       if (shift !== undefined) data.shift = shift as Shift;
-      if (startAt !== undefined) data.startAt = startAt ? new Date(startAt as string) : null;
-      if (endAt !== undefined) data.endAt = endAt ? new Date(endAt as string) : null;
+      if (startAt !== undefined) data.startAt = startAt ? new Date(startAt) : null;
+      if (endAt !== undefined) data.endAt = endAt ? new Date(endAt) : null;
       if (status !== undefined) data.status = status as TaskStatus;
       if (maxHelpers !== undefined) data.maxHelpers = maxHelpers !== null ? Number(maxHelpers) : null;
 
-      await repo.updateTask(taskId, data); 
-
-      const eventId = Number.parseInt(req.params.id, 10);
-      const full = await repo.listTasksByEvent(eventId);
-      return res.json(full);
+      return res.json(await service.updateTask(taskId, eventId, data));
     } catch (err) {
       return next(err);
     }
@@ -120,10 +150,11 @@ router.patch(
 router.delete(
   "/:id/portal/tasks/:taskId",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalTaskParamsSchema }),
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
     try {
-      const taskId = Number.parseInt(req.params.taskId, 10);
-      await repo.deleteTask(taskId);
+      await service.deleteTask(Number.parseInt(req.params.taskId, 10));
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -135,13 +166,18 @@ router.delete(
 router.delete(
   "/:id/portal/tasks/:taskId/assignees/:assigneeId",
   requireAuth,
-  async (req: Request<{ id: string; taskId: string; assigneeId: string }>, res: Response, next: NextFunction) => {
+  requireAccess("manageContent"),
+  validate({ params: portalTaskAssigneeParamsSchema }),
+  async (
+    req: Request<{ id: string; taskId: string; assigneeId: string }>,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const assigneeId = Number.parseInt(req.params.assigneeId, 10);
-      await repo.removeTaskAssigneeById(assigneeId);
+      const taskId = Number.parseInt(req.params.taskId, 10);
       const eventId = Number.parseInt(req.params.id, 10);
-      const full = await repo.listTasksByEvent(eventId);
-      return res.json(full);
+      return res.json(await service.removeTaskAssignee(assigneeId, taskId, eventId));
     } catch (err) {
       return next(err);
     }
@@ -151,53 +187,23 @@ router.delete(
 // ── Claim task (auth or invite token) ─────────────────────────────────────
 router.post(
   "/:id/portal/tasks/:taskId/claim",
+  optionalAuth,
+  validate({ params: portalTaskParamsSchema, query: portalClaimQuerySchema }),
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
     try {
       const { token } = req.query as { token?: string };
       const { name, email } = req.body as { name?: string; email?: string };
-      let userId: number | null = null;
-
-      if (req.headers.authorization) {
-        try {
-          requireAuth(req as any, res as any, (e?: unknown) => { if (e) throw e; });
-          userId = req.authUser?.id ?? null;
-        } catch { userId = null; }
-      }
+      const userId: number | null = req.authUser?.id ?? null;
 
       if (!userId && token) {
-        const invite = await repo.findInviteToken(token);
-        if (!invite) return res.status(401).json({ error: "Ongeldige uitnodigingslink" });
+        await service.validateInviteToken(token);
       } else if (!userId) {
-        return res.status(401).json({ error: "Authenticatie of uitnodigingslink vereist" });
+        return next(new HttpError(401, "Authenticatie of uitnodigingslink vereist"));
       }
 
-      if (!name?.trim()) return res.status(400).json({ error: "Naam is verplicht" });
+      if (!name?.trim()) return next(new HttpError(400, "Naam is verplicht"));
 
-      const taskId = Number.parseInt(req.params.taskId, 10);
-      const task = await repo.findTaskById(taskId);
-      if (!task) return res.status(404).json({ error: "Taak niet gevonden" });
-
-      // Check capacity
-      if (task.maxHelpers !== null) {
-        const count = await repo.countTaskAssignees(taskId);
-        if (count >= task.maxHelpers) {
-          return res.status(409).json({ error: "Deze shift is al vol" });
-        }
-      }
-
-      // Resolve user by email if provided
-      let resolvedUserId = userId;
-      if (!resolvedUserId && email) {
-        const user = await repo.findOrCreateUserByEmail(email, name);
-        resolvedUserId = user?.id ?? null;
-      }
-
-      await repo.addTaskAssignee(taskId, {
-        userId: resolvedUserId,
-        name: name.trim(),
-        email: email?.trim() || undefined,
-      });
-
+      await service.claimTask(Number.parseInt(req.params.taskId, 10), { userId, name, email });
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -209,11 +215,11 @@ router.post(
 router.post(
   "/:id/portal/tasks/:taskId/unclaim",
   requireAuth,
+  validate({ params: portalTaskParamsSchema }),
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
     try {
-      const taskId = Number.parseInt(req.params.taskId, 10);
       const userId = req.authUser?.id;
-      if (userId) await repo.removeTaskAssigneeByUser(taskId, userId);
+      if (userId) await service.unclaimTask(Number.parseInt(req.params.taskId, 10), userId);
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -225,13 +231,11 @@ router.post(
 router.post(
   "/:id/portal/tasks/:taskId/toggleDone",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalTaskParamsSchema }),
   async (req: Request<{ id: string; taskId: string }>, res: Response, next: NextFunction) => {
     try {
-      const taskId = Number.parseInt(req.params.taskId, 10);
-      const task = await repo.findTaskById(taskId);
-      if (!task) return res.status(404).json({ error: "Taak niet gevonden" });
-      const newStatus: TaskStatus = task.status === TaskStatus.DONE ? TaskStatus.OPEN : TaskStatus.DONE;
-      await repo.updateTaskStatus(taskId, newStatus);
+      await service.toggleTaskDone(Number.parseInt(req.params.taskId, 10));
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -243,12 +247,13 @@ router.post(
 router.post(
   "/:id/portal/invite",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalEventParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
-      const eventId = Number.parseInt(req.params.id, 10);
-      const token = uuidv4();
-      await repo.createInviteToken(eventId, token, req.authUser?.id);
-      return res.json({ token });
+      return res.json(
+        await service.generateInviteLink(Number.parseInt(req.params.id, 10), req.authUser?.id)
+      );
     } catch (err) {
       return next(err);
     }
@@ -259,11 +264,29 @@ router.post(
 router.get(
   "/:id/portal/attendance",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalEventParamsSchema }),
+  async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+    try {
+      return res.json(await service.listAttendance(Number.parseInt(req.params.id, 10)));
+    } catch (err) {
+      return next(err);
+    }
+  }
+);
+
+// ── Import volunteers who helped this year into an event's attendance (admin) ─
+router.post(
+  "/:id/portal/import-volunteers",
+  requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalEventParamsSchema, query: portalYearQuerySchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
       const eventId = Number.parseInt(req.params.id, 10);
-      const rows = await repo.listAttendance(eventId);
-      return res.json(rows);
+      const yearParam = req.query.year as string | undefined;
+      const year = yearParam ? Number.parseInt(yearParam, 10) : undefined;
+      return res.json(await service.importVolunteers(eventId, year));
     } catch (err) {
       return next(err);
     }
@@ -274,15 +297,16 @@ router.get(
 router.patch(
   "/:id/portal/attendance/:aid",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalAttendanceParamsSchema }),
   async (req: Request<{ id: string; aid: string }>, res: Response, next: NextFunction) => {
     try {
       const id = Number.parseInt(req.params.aid, 10);
       const { status } = req.body as { status?: string };
       if (!status || !(Object.values(RSVPStatus) as string[]).includes(status)) {
-        return res.status(400).json({ error: "Ongeldige status" });
+        return next(new HttpError(400, "Ongeldige status"));
       }
-      const updated = await repo.updateAttendanceRsvp(id, status as RSVPStatus);
-      return res.json(updated);
+      return res.json(await service.updateAttendanceRsvp(id, status as RSVPStatus));
     } catch (err) {
       return next(err);
     }
@@ -293,10 +317,11 @@ router.patch(
 router.delete(
   "/:id/portal/attendance/:aid",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalAttendanceParamsSchema }),
   async (req: Request<{ id: string; aid: string }>, res: Response, next: NextFunction) => {
     try {
-      const id = Number.parseInt(req.params.aid, 10);
-      await repo.deleteAttendance(id);
+      await service.deleteAttendance(Number.parseInt(req.params.aid, 10));
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -307,25 +332,20 @@ router.delete(
 // ── RSVP (public) ──────────────────────────────────────────────────────────
 router.post(
   "/:id/portal/rsvp",
+  optionalAuth,
+  validate({ params: portalEventParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
       const eventId = Number.parseInt(req.params.id, 10);
       const { name, email, status } = req.body as { name: string; email?: string; status?: string };
-      let userId: number | undefined;
+      const userId: number | undefined = req.authUser?.id;
 
-      if (req.headers.authorization) {
-        try {
-          requireAuth(req as any, res as any, (e?: unknown) => { if (e) throw e; });
-          userId = req.authUser?.id;
-        } catch { userId = undefined; }
-      }
-
-      if (!name) return res.status(400).json({ error: "Naam is verplicht" });
+      if (!name) return next(new HttpError(400, "Naam is verplicht"));
       const statusEnum =
         status && (Object.values(RSVPStatus) as string[]).includes(status)
           ? (status as RSVPStatus)
           : undefined;
-      await repo.createAttendance(eventId, { name, email, userId, status: statusEnum });
+      await service.rsvp(eventId, { name, email, userId, status: statusEnum });
       return res.json({ success: true });
     } catch (err) {
       return next(err);
@@ -337,10 +357,12 @@ router.post(
 router.get(
   "/:id/portal/export",
   requireAuth,
+  requireAccess("manageContent"),
+  validate({ params: portalEventParamsSchema }),
   async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
     try {
       const eventId = Number.parseInt(req.params.id, 10);
-      const csv = await repo.exportAttendanceCsv(eventId);
+      const csv = await service.exportAttendanceCsv(eventId);
       res.setHeader("Content-Type", "text/csv");
       res.setHeader("Content-Disposition", `attachment; filename=event-${eventId}-attendance.csv`);
       return res.send(csv);

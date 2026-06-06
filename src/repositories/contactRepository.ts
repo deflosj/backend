@@ -1,4 +1,4 @@
-import { ContactMessage, MsgStatus } from "@prisma/client";
+import { ContactMessage, MessageStatus } from "@prisma/client";
 import prisma from "../database/prisma";
 
 export interface ContactMessageData {
@@ -33,7 +33,7 @@ export const markContactMessageRead = async (id: number): Promise<ContactMessage
       id,
     },
     data: {
-      status: MsgStatus.READ,
+      status: MessageStatus.READ,
       readAt: new Date(),
     },
   });
@@ -45,7 +45,7 @@ export const archiveContactMessage = async (id: number): Promise<ContactMessage>
       id,
     },
     data: {
-      status: MsgStatus.ARCHIVED,
+      status: MessageStatus.ARCHIVED,
     },
   });
 };

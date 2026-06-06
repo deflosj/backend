@@ -2,9 +2,9 @@ import request from "supertest";
 import jwt from "jsonwebtoken";
 import { createApp } from "../app";
 import config from "../config";
-import * as contentService from "../services/contentService";
-import * as memberService from "../services/memberService";
-import * as contactService from "../services/contactService";
+import * as contentService from "../services/content.service";
+import * as memberService from "../services/member.service";
+import * as contactService from "../services/contact.service";
 
 jest.mock("../services/contentService", () => ({
   __esModule: true,
