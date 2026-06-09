@@ -29,11 +29,17 @@
   - Added the required column `updatedAt` to the `Tournament` table without a default value. This is not possible if the table is not empty.
 
 */
--- CreateEnum
-CREATE TYPE "MessageStatus" AS ENUM ('UNREAD', 'READ', 'ARCHIVED');
+-- CreateEnum (idempotent: type may already exist from a previous failed attempt)
+DO $$ BEGIN
+  CREATE TYPE "MessageStatus" AS ENUM ('UNREAD', 'READ', 'ARCHIVED');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY');
+DO $$ BEGIN
+  CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AlterEnum
 BEGIN;
