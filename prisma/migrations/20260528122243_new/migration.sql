@@ -212,6 +212,13 @@ CREATE INDEX "TournamentInviteCode_createdById_idx" ON "TournamentInviteCode"("c
 -- CreateIndex
 CREATE UNIQUE INDEX "Attendance_eventId_userId_key" ON "Attendance"("eventId", "userId");
 
+-- Remove duplicate nationalRegisterNumber rows before adding unique constraint (keep most recent per number)
+DELETE FROM "Registration" a
+USING "Registration" b
+WHERE a.id < b.id
+  AND a."nationalRegisterNumber" IS NOT NULL
+  AND a."nationalRegisterNumber" = b."nationalRegisterNumber";
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Registration_nationalRegisterNumber_key" ON "Registration"("nationalRegisterNumber");
 
