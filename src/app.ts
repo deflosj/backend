@@ -135,3 +135,8 @@ export const startServer = (app: Express): void => {
     });
   });
 };
+
+// Vercel (Express zero-config) laadt dit bestand rechtstreeks en verwacht een
+// default export met de app. Lokaal start src/index.ts de server zoals vroeger.
+const vercelApp = createApp();
+export default vercelApp;
