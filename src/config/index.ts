@@ -12,6 +12,15 @@ interface Config {
   refreshTokenExpiry: string;
   logLevel: string;
   corsOrigin: string[];
+  /** Waar de publieke site draait — basis voor links in mails. */
+  publicSiteUrl: string;
+  smtp: {
+    host: string;
+    port: number;
+    user: string;
+    password: string;
+    from: string;
+  };
   database: {
     url: string;
     host: string;
@@ -49,6 +58,7 @@ const getConfig = (): Config => {
   const refreshTokenExpiry = "30d";
   const logLevel = process.env.LOG_LEVEL || "info";
   const corsOrigin = (process.env.CORS_ORIGIN || "http://localhost:3000").split(",");
+  const publicSiteUrl = (process.env.PUBLIC_SITE_URL || corsOrigin[0]).replace(/\/$/, "");
 
   return {
     nodeEnv,
@@ -60,6 +70,14 @@ const getConfig = (): Config => {
     refreshTokenExpiry,
     logLevel,
     corsOrigin,
+    publicSiteUrl,
+    smtp: {
+      host: process.env.SMTP_HOST || "",
+      port: Number.parseInt(process.env.SMTP_PORT || "587", 10),
+      user: process.env.SMTP_USER || "",
+      password: process.env.SMTP_PASSWORD || "",
+      from: process.env.SMTP_FROM || process.env.SMTP_USER || "",
+    },
     database: {
       url: process.env.DATABASE_URL || "postgresql://localhost/vzw_db",
       host: process.env.DB_HOST || "localhost",

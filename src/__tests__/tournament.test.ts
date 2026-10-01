@@ -36,6 +36,8 @@ const T = {
   createdAt: new Date("2025-01-01"),
   rules: null,
   rulesUpdatedAt: null,
+  teamEditDeadline: null,
+  updatedAt: new Date("2025-01-01"),
   poules: [],
   teams: [],
   matches: [],
@@ -60,16 +62,26 @@ const TEAM = {
   id: 1,
   tournamentId: 1,
   captainId: null,
+  captainName: "Luca",
   pouleId: 1,
   name: "De Vlaamse Arend",
   logoUrl: null,
   isPresent: false,
-  players: [
-    { id: 1, teamId: 1, name: "Luca", isCaptain: true },
-    { id: 2, teamId: 1, name: "Tom", isCaptain: false },
-    { id: 3, teamId: 1, name: "Wout", isCaptain: false },
-    { id: 4, teamId: 1, name: "Jens", isCaptain: false },
-  ],
+  isPaid: true,
+  speler1: "Luca",
+  speler2: "Tom",
+  speler3: "Wout",
+  speler4: "Jens",
+  createdAt: new Date("2025-01-01"),
+  updatedAt: new Date("2025-01-01"),
+  played: 0,
+  won: 0,
+  drawn: 0,
+  lost: 0,
+  goalsFor: 0,
+  goalsAgainst: 0,
+  saldo: 0,
+  points: 0,
 };
 
 const MATCH = {
@@ -125,14 +137,14 @@ describe("Tournament Routes", () => {
     });
 
     it("GET /:id returns a tournament by id", async () => {
-      svc.getTournament.mockResolvedValue(T);
+      svc.getTournamentView.mockResolvedValue(T);
       const res = await request(app).get("/tournaments/1");
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(1);
     });
 
     it("GET /:id returns 404 when not found", async () => {
-      svc.getTournament.mockRejectedValue(new HttpError(404, "Tournament not found"));
+      svc.getTournamentView.mockRejectedValue(new HttpError(404, "Tournament not found"));
       const res = await request(app).get("/tournaments/99");
       expect(res.status).toBe(404);
       expect(res.body.message).toBe("Tournament not found");
@@ -366,25 +378,24 @@ describe("Tournament Routes", () => {
         .set("Authorization", `Bearer ${adminToken}`)
         .send({
           name: "De Vlaamse Arend",
-          players: [
-            { name: "Luca", isCaptain: true },
-            { name: "Tom" },
-            { name: "Wout" },
-            { name: "Jens" },
-          ],
+          captainName: "Luca",
+          speler1: "Luca",
+          speler2: "Tom",
+          speler3: "Wout",
+          speler4: "Jens",
         });
       expect(res.status).toBe(201);
       expect(res.body.name).toBe("De Vlaamse Arend");
     });
 
     it("POST /:id/teams returns 400 when validation fails", async () => {
-      svc.addTeam.mockRejectedValue(new HttpError(400, "All player names are required"));
+      svc.addTeam.mockRejectedValue(new HttpError(400, "Name is required"));
       const res = await request(app)
         .post("/tournaments/1/teams")
         .set("Authorization", `Bearer ${adminToken}`)
-        .send({ name: "X", players: [{ name: "" }] });
+        .send({ name: "" });
       expect(res.status).toBe(400);
-      expect(res.body.message).toBe("All player names are required");
+      expect(res.body.message).toBe("Name is required");
     });
 
     it("POST /:id/teams returns 401 without auth", async () => {

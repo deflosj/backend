@@ -2,8 +2,9 @@ import { NextFunction, Request, Response, Router } from "express";
 import { z } from "zod";
 import { Phase } from "@prisma/client";
 import { HttpError } from "../utils/httpError";
-import { requireAuth } from "../middleware/auth";
+import { optionalAuth, requireAuth } from "../middleware/auth";
 import { requireAccess } from "../middleware/authorizeRole";
+import { ROLE_MANAGER } from "../config/roleManager";
 import { validate } from "../utils/validate";
 import {
   addMatch,
@@ -19,6 +20,7 @@ import {
   generateKnockout,
   getActiveTournament,
   getMatch,
+  getTournamentView,
   getPoule,
   getTeam,
   getTiebreaker,
@@ -36,9 +38,16 @@ import {
   resolveTiebreakerWinner,
   saveTiebreaker,
   saveTournamentRules,
+  selfRegisterTeam,
   setActiveTournament,
   toggleCheckIn,
 } from "../services/tournament.service";
+import {
+  getTeamPortal,
+  saveTeamPortalLogo,
+  sendPortalLink,
+  updateTeamPortal,
+} from "../services/teamPortal.service";
 import {
   createTournamentCode,
   listTournamentCodes,
@@ -76,6 +85,15 @@ const tournamentCodeParamsSchema = z.object({
 
 const PHASE_VALUES = Object.values(Phase) as [Phase, ...Phase[]];
 
+const portalTokenParamsSchema = z.object({
+  token: z.string().min(8, { message: "Invalid token" }),
+});
+
+/** Wie het toernooi beheert, krijgt de portaaltokens en e-mailadressen mee;
+ *  iedereen anders niet. Zie teamPortal.service. */
+const canManageTournament = (req: Request): boolean =>
+  Boolean(req.authUser && (ROLE_MANAGER.manageTournament.roles as readonly string[]).includes(req.authUser.role));
+
 const tournamentMatchesQuerySchema = z.object({
   phase: z.enum(PHASE_VALUES).optional(),
   pouleId: z.coerce.number().int().positive().optional(),
@@ -91,17 +109,72 @@ tournamentRouter.get("/", async (_req: Request, res: Response, next: NextFunctio
   }
 });
 
-tournamentRouter.get("/active", async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.get("/active", optionalAuth, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json(await getActiveTournament());
+    res.json(await getActiveTournament(canManageTournament(req)));
   } catch (e) {
     next(e);
   }
 });
 
-tournamentRouter.get("/:id", validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// ── Zelf aanmelden (publiek — QR-code in het café) ───────────────────────────
+
+tournamentRouter.post("/active/self-register", async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json(await getTournament(Number.parseInt(req.params.id, 10)));
+    res.status(201).json(await selfRegisterTeam({
+      name: req.body?.name,
+      captainName: req.body?.captainName,
+      email: req.body?.email ?? null,
+      phone: req.body?.phone,
+      speler1: req.body?.speler1,
+      speler2: req.body?.speler2,
+      speler3: req.body?.speler3,
+      speler4: req.body?.speler4,
+    }));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ── Teamportaal (publiek — de token is de sleutel) ────────────────────────────
+
+tournamentRouter.get("/teams/portal/:token", validate({ params: portalTokenParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await getTeamPortal(req.params.token));
+  } catch (e) {
+    next(e);
+  }
+});
+
+const savePortal = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await updateTeamPortal(req.params.token, {
+      name: req.body.name,
+      speler1: req.body.speler1,
+      speler2: req.body.speler2,
+      speler3: req.body.speler3,
+      speler4: req.body.speler4,
+    }));
+  } catch (e) {
+    next(e);
+  }
+};
+
+tournamentRouter.patch("/teams/portal/:token", validate({ params: portalTokenParamsSchema }), savePortal);
+tournamentRouter.put("/teams/portal/:token", validate({ params: portalTokenParamsSchema }), savePortal);
+
+tournamentRouter.post("/teams/portal/:token/logo", validate({ params: portalTokenParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { logoUrl, portal } = await saveTeamPortalLogo(req.params.token, req.body.dataUrl);
+    res.json({ logoUrl, ...portal });
+  } catch (e) {
+    next(e);
+  }
+});
+
+tournamentRouter.get("/:id", optionalAuth, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await getTournamentView(Number.parseInt(req.params.id, 10), canManageTournament(req)));
   } catch (e) {
     next(e);
   }
@@ -121,7 +194,15 @@ tournamentRouter.post("/", ...adminOnly, async (req: Request, res: Response, nex
   }
 });
 
-tournamentRouter.put("/:id", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const parseDeadline = (value: unknown): Date | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) throw new HttpError(400, "teamEditDeadline is not a valid date");
+  return d;
+};
+
+const saveTournament = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await editTournament(Number.parseInt(req.params.id, 10), {
       name: req.body.name,
@@ -130,11 +211,15 @@ tournamentRouter.put("/:id", ...adminOnly, validate({ params: tournamentIdParams
       teamsAdvancingPerPoule: req.body.teamsAdvancingPerPoule,
       bestNthsAdvancing: req.body.bestNthsAdvancing,
       status: req.body.status,
+      teamEditDeadline: parseDeadline(req.body.teamEditDeadline),
     }));
   } catch (e) {
     next(e);
   }
-});
+};
+
+tournamentRouter.put("/:id", ...adminOnly, validate({ params: tournamentIdParamsSchema }), saveTournament);
+tournamentRouter.patch("/:id", ...adminOnly, validate({ params: tournamentIdParamsSchema }), saveTournament);
 
 tournamentRouter.delete("/:id", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -197,13 +282,16 @@ tournamentRouter.post("/:id/poules", ...adminOnly, validate({ params: tournament
   }
 });
 
-tournamentRouter.put("/:id/poules/:pouleId", ...adminOnly, validate({ params: tournamentPouleParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const savePoule = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await editPoule(Number.parseInt(req.params.pouleId, 10), { name: req.body.name, description: req.body.description, phase: req.body.phase }));
   } catch (e) {
     next(e);
   }
-});
+};
+
+tournamentRouter.put("/:id/poules/:pouleId", ...adminOnly, validate({ params: tournamentPouleParamsSchema }), savePoule);
+tournamentRouter.patch("/:id/poules/:pouleId", ...adminOnly, validate({ params: tournamentPouleParamsSchema }), savePoule);
 
 tournamentRouter.delete("/:id/poules/:pouleId", ...adminOnly, validate({ params: tournamentPouleParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -224,17 +312,17 @@ tournamentRouter.get("/:id/poules/:pouleId", validate({ params: tournamentPouleP
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
-tournamentRouter.get("/:id/teams", validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.get("/:id/teams", optionalAuth, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json(await listTeams(Number.parseInt(req.params.id, 10)));
+    res.json(await listTeams(Number.parseInt(req.params.id, 10), canManageTournament(req)));
   } catch (e) {
     next(e);
   }
 });
 
-tournamentRouter.get("/:id/teams/:teamId", validate({ params: tournamentTeamParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+tournamentRouter.get("/:id/teams/:teamId", optionalAuth, validate({ params: tournamentTeamParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json(await getTeam(Number.parseInt(req.params.teamId, 10)));
+    res.json(await getTeam(Number.parseInt(req.params.teamId, 10), canManageTournament(req)));
   } catch (e) {
     next(e);
   }
@@ -248,7 +336,16 @@ tournamentRouter.post("/:id/teams", ...adminOnly, validate({ params: tournamentI
         logoUrl: req.body.logoUrl ?? null,
         pouleId: req.body.pouleId ?? null,
         captainId: req.body.captainId ?? null,
-        players: req.body.players ?? [],
+        captainName: req.body.captainName ?? null,
+        email: req.body.email ?? null,
+        phone: req.body.phone ?? null,
+        isPaid: req.body.isPaid ?? false,
+        paymentMethod: req.body.paymentMethod ?? null,
+        isPresent: req.body.isPresent ?? false,
+        speler1: req.body.speler1 ?? "",
+        speler2: req.body.speler2 ?? "",
+        speler3: req.body.speler3 ?? "",
+        speler4: req.body.speler4 ?? "",
       })
     );
   } catch (e) {
@@ -256,7 +353,7 @@ tournamentRouter.post("/:id/teams", ...adminOnly, validate({ params: tournamentI
   }
 });
 
-tournamentRouter.put("/:id/teams/:teamId", ...adminOnly, validate({ params: tournamentTeamParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+const saveTeam = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(
       await editTeam(Number.parseInt(req.params.teamId, 10), {
@@ -264,9 +361,29 @@ tournamentRouter.put("/:id/teams/:teamId", ...adminOnly, validate({ params: tour
         logoUrl: req.body.logoUrl,
         pouleId: req.body.pouleId,
         captainId: req.body.captainId,
-        players: req.body.players,
+        captainName: req.body.captainName,
+        email: req.body.email,
+        phone: req.body.phone,
+        isPaid: req.body.isPaid,
+        paymentMethod: req.body.paymentMethod,
+        isPresent: req.body.isPresent,
+        speler1: req.body.speler1,
+        speler2: req.body.speler2,
+        speler3: req.body.speler3,
+        speler4: req.body.speler4,
       })
     );
+  } catch (e) {
+    next(e);
+  }
+};
+
+tournamentRouter.put("/:id/teams/:teamId", ...adminOnly, validate({ params: tournamentTeamParamsSchema }), saveTeam);
+tournamentRouter.patch("/:id/teams/:teamId", ...adminOnly, validate({ params: tournamentTeamParamsSchema }), saveTeam);
+
+tournamentRouter.post("/:id/teams/:teamId/send-link", ...adminOnly, validate({ params: tournamentTeamParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await sendPortalLink(Number.parseInt(req.params.teamId, 10), req.body.email));
   } catch (e) {
     next(e);
   }
@@ -327,23 +444,54 @@ tournamentRouter.post("/:id/matches", ...adminOnly, validate({ params: tournamen
   }
 });
 
-tournamentRouter.put("/:id/matches/:matchId", ...adminOnly, validate({ params: tournamentMatchParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+/** Eén opslagknop in het beheerscherm zet ploegen, tijd, baan én score. De
+ *  score loopt via `recordScore`, zodat de winnaar meteen doorschuift naar de
+ *  volgende bracketronde. */
+/** Aan de wedstrijdtafel typt men "15:00", niet een ISO-tijdstip. Een uur
+ *  zonder datum wordt op de dag van de wedstrijd geplakt. */
+const parseMatchTime = (value: unknown, current: Date | null): Date | undefined => {
+  if (value === undefined || value === null || value === "") return undefined;
+  const raw = String(value).trim();
+
+  const hhmm = /^(\d{1,2}):(\d{2})$/.exec(raw);
+  if (hhmm) {
+    const base = current ? new Date(current) : new Date();
+    base.setHours(Number.parseInt(hhmm[1], 10), Number.parseInt(hhmm[2], 10), 0, 0);
+    return base;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) throw new HttpError(400, "Tijd is geen geldig tijdstip (verwacht bv. 15:00).");
+  return parsed;
+};
+
+const saveMatch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    res.json(
-      await editMatch(Number.parseInt(req.params.matchId, 10), {
-        pouleId: req.body.pouleId,
-        teamAId: req.body.teamAId,
-        teamBId: req.body.teamBId,
-        scheduledAt: req.body.time ? new Date(req.body.time) : undefined,
-        track: req.body.track,
-        phase: req.body.phase,
-        bracketPos: req.body.bracketPos,
-      })
-    );
+    const matchId = Number.parseInt(req.params.matchId, 10);
+    const current = await getMatch(matchId);
+    let match = await editMatch(matchId, {
+      pouleId: req.body.pouleId,
+      teamAId: req.body.teamAId,
+      teamBId: req.body.teamBId,
+      scheduledAt: parseMatchTime(req.body.time, current.scheduledAt),
+      track: req.body.track,
+      phase: req.body.phase,
+      bracketPos: req.body.bracketPos,
+    });
+
+    if (req.body.scoreA !== undefined && req.body.scoreA !== null &&
+        req.body.scoreB !== undefined && req.body.scoreB !== null) {
+      match = await recordScore(matchId, Number.parseInt(req.body.scoreA, 10), Number.parseInt(req.body.scoreB, 10));
+    }
+
+    res.json(match);
   } catch (e) {
     next(e);
   }
-});
+};
+
+tournamentRouter.put("/:id/matches/:matchId", ...adminOnly, validate({ params: tournamentMatchParamsSchema }), saveMatch);
+tournamentRouter.patch("/:id/matches/:matchId", ...adminOnly, validate({ params: tournamentMatchParamsSchema }), saveMatch);
 
 tournamentRouter.delete("/:id/matches/:matchId", ...adminOnly, validate({ params: tournamentMatchParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -482,7 +630,10 @@ tournamentRouter.post("/:id/redeem", requireAuth, validate({ params: tournamentI
         {
           code: req.body.code,
           teamName: req.body.teamName,
-          players: req.body.players ?? [],
+          speler1: req.body.speler1 ?? "",
+          speler2: req.body.speler2 ?? "",
+          speler3: req.body.speler3 ?? "",
+          speler4: req.body.speler4 ?? "",
           logoUrl: req.body.logoUrl ?? null,
         }
       )
@@ -516,7 +667,10 @@ tournamentRouter.put("/:id/my-team", requireAuth, validate({ params: tournamentI
       await editTeam(myTeam.id, {
         name: req.body.name,
         logoUrl: req.body.logoUrl,
-        players: req.body.players,
+        speler1: req.body.speler1,
+        speler2: req.body.speler2,
+        speler3: req.body.speler3,
+        speler4: req.body.speler4,
       })
     );
   } catch (e) {

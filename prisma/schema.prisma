@@ -404,6 +404,8 @@ model Tournament {
   status                 TournamentStatus @default(UPCOMING)
   rules                  String?
   rulesUpdatedAt         DateTime?
+  /// Tot wanneer teams zichzelf via hun portaallink mogen aanpassen.
+  teamEditDeadline       DateTime?
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
 
@@ -434,19 +436,6 @@ model Poule {
   @@index([tournamentId])
 }
 
-model Player {
-  id        Int     @id @default(autoincrement())
-  teamId    Int
-  name      String
-  isCaptain Boolean @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-
-  @@index([teamId])
-}
-
 model Team {
   id           Int     @id @default(autoincrement())
   tournamentId Int
@@ -455,13 +444,28 @@ model Team {
   name         String
   logoUrl      String?
   isPresent    Boolean @default(false)
+  /// Inschrijvingsgeld betaald aan de balie.
+  isPaid       Boolean @default(false)
+  /// Hoe er betaald is: CASH of PAYCONIQ (null = onbekend / niet betaald).
+  paymentMethod String?
+  /// Naam van de kapitein zoals aan de balie ingetikt — geen account.
+  captainName  String?
+  /// Adres waar de portaallink naartoe gaat. Nooit publiek teruggeven.
+  email        String?
+  /// Gsm van de kapitein. Nooit publiek teruggeven.
+  phone        String?
+  speler1      String  @default("")
+  speler2      String  @default("")
+  speler3      String  @default("")
+  speler4      String  @default("")
+  /// Sleutel van het teamportaal. Nooit publiek teruggeven.
+  token        String  @unique
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   captain    User?      @relation("TeamCaptain", fields: [captainId], references: [id], onDelete: SetNull)
   poule      Poule?     @relation(fields: [pouleId], references: [id])
-  players    Player[]
 
   matchesAsTeamA  Match[]        @relation("MatchTeamA")
   matchesAsTeamB  Match[]        @relation("MatchTeamB")

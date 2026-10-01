@@ -1,4 +1,5 @@
-import { Match, Phase, Player, Poule, Team, Tiebreaker, TiebreakerTeam, Tournament, TournamentStatus } from "@prisma/client";
+import crypto from "crypto";
+import { Match, Phase, Poule, Team, Tiebreaker, TiebreakerTeam, Tournament, TournamentStatus } from "@prisma/client";
 import prisma from "../database/prisma";
 
 // ── Tournament ────────────────────────────────────────────────────────────────
@@ -10,6 +11,7 @@ export interface TournamentData {
   teamsAdvancingPerPoule?: number | null;
   bestNthsAdvancing?: number | null;
   status?: TournamentStatus;
+  teamEditDeadline?: Date | null;
 }
 
 export const findAllTournaments = (): Promise<Tournament[]> =>
@@ -58,15 +60,15 @@ export interface PouleData {
   phase?: Phase;
 }
 
-export const findPoulesByTournament = (tournamentId: number): Promise<(Poule & { teams: TeamWithPlayers[] })[]> =>
+export const findPoulesByTournament = (tournamentId: number): Promise<(Poule & { teams: Team[] })[]> =>
   prisma.poule.findMany({
     where: { tournamentId },
-    include: { teams: { include: { players: true } } },
+    include: { teams: true },
     orderBy: { name: "asc" },
   });
 
-export const findPouleById = (id: number): Promise<(Poule & { teams: TeamWithPlayers[] }) | null> =>
-  prisma.poule.findUnique({ where: { id }, include: { teams: { include: { players: true } } } });
+export const findPouleById = (id: number): Promise<(Poule & { teams: Team[] }) | null> =>
+  prisma.poule.findUnique({ where: { id }, include: { teams: true } });
 
 export const createPoule = (tournamentId: number, data: PouleData): Promise<Poule> =>
   prisma.poule.create({ data: { tournamentId, ...data } });
@@ -79,28 +81,37 @@ export const deletePoule = (id: number): Promise<Poule> =>
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
-export type TeamWithPlayers = Team & { players: Player[] };
-
-export interface PlayerInput {
-  name: string;
-  isCaptain?: boolean;
-}
-
 export interface TeamData {
   name: string;
   logoUrl?: string | null;
   pouleId?: number | null;
   captainId?: number | null;
-  players: PlayerInput[];
+  captainName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  isPaid?: boolean;
+  paymentMethod?: string | null;
+  isPresent?: boolean;
+  speler1?: string;
+  speler2?: string;
+  speler3?: string;
+  speler4?: string;
 }
 
-export const findTeamsByTournament = (tournamentId: number): Promise<TeamWithPlayers[]> =>
-  prisma.team.findMany({ where: { tournamentId }, include: { players: true }, orderBy: { name: "asc" } });
+/** Portaalsleutel. Los van de invitecodes: die zijn kort en eenmalig, deze
+ *  is lang en blijft het hele toernooi geldig. */
+export const generateTeamToken = (): string => crypto.randomBytes(16).toString("hex");
 
-export const findTeamById = (id: number): Promise<TeamWithPlayers | null> =>
-  prisma.team.findUnique({ where: { id }, include: { players: true } });
+export const findTeamsByTournament = (tournamentId: number): Promise<Team[]> =>
+  prisma.team.findMany({ where: { tournamentId }, orderBy: { name: "asc" } });
 
-export const createTeam = (tournamentId: number, data: TeamData): Promise<TeamWithPlayers> =>
+export const findTeamById = (id: number): Promise<Team | null> =>
+  prisma.team.findUnique({ where: { id } });
+
+export const findTeamByToken = (token: string): Promise<Team | null> =>
+  prisma.team.findUnique({ where: { token } });
+
+export const createTeam = (tournamentId: number, data: TeamData): Promise<Team> =>
   prisma.team.create({
     data: {
       tournamentId,
@@ -108,31 +119,31 @@ export const createTeam = (tournamentId: number, data: TeamData): Promise<TeamWi
       logoUrl: data.logoUrl,
       pouleId: data.pouleId,
       captainId: data.captainId,
-      players: { create: data.players },
+      captainName: data.captainName,
+      email: data.email,
+      phone: data.phone,
+      isPaid: data.isPaid ?? false,
+      paymentMethod: data.paymentMethod ?? null,
+      isPresent: data.isPresent ?? false,
+      speler1: data.speler1 ?? "",
+      speler2: data.speler2 ?? "",
+      speler3: data.speler3 ?? "",
+      speler4: data.speler4 ?? "",
+      token: generateTeamToken(),
     },
-    include: { players: true },
   });
 
-export const updateTeam = (id: number, data: Partial<TeamData>): Promise<TeamWithPlayers> => {
-  const { players, ...rest } = data;
-  if (players !== undefined) {
-    return prisma.$transaction(async (tx) => {
-      await tx.player.deleteMany({ where: { teamId: id } });
-      return tx.team.update({
-        where: { id },
-        data: { ...rest, players: { create: players } },
-        include: { players: true },
-      });
-    });
-  }
-  return prisma.team.update({ where: { id }, data: rest, include: { players: true } });
-};
+export const updateTeam = (id: number, data: Partial<TeamData>): Promise<Team> =>
+  prisma.team.update({ where: { id }, data });
 
 export const deleteTeam = (id: number): Promise<Team> =>
   prisma.team.delete({ where: { id } });
 
-export const checkInTeam = (id: number, isPresent: boolean): Promise<TeamWithPlayers> =>
-  prisma.team.update({ where: { id }, data: { isPresent }, include: { players: true } });
+export const checkInTeam = (id: number, isPresent: boolean): Promise<Team> =>
+  prisma.team.update({ where: { id }, data: { isPresent } });
+
+export const updateTeamLogo = (id: number, logoUrl: string): Promise<Team> =>
+  prisma.team.update({ where: { id }, data: { logoUrl } });
 
 // ── Matches ───────────────────────────────────────────────────────────────────
 
@@ -219,7 +230,7 @@ export const setTiebreakerScore = (tiebreakerId: number, teamId: number, score: 
 export const findPoulesWithTeams = (tournamentId: number) =>
   prisma.poule.findMany({
     where: { tournamentId, phase: "GROUP_STAGE" },
-    include: { teams: { include: { players: true }, orderBy: { id: "asc" } } },
+    include: { teams: { orderBy: { id: "asc" } } },
     orderBy: { name: "asc" },
   });
 
@@ -236,6 +247,8 @@ export const shiftFutureMatchTimes = async (tournamentId: number, minutes: numbe
     UPDATE "Match"
     SET "scheduledAt" = "scheduledAt" + (${minutes} * INTERVAL '1 minute')
     WHERE "tournamentId" = ${tournamentId}
+      AND "scoreA" IS NULL
+      AND "scoreB" IS NULL
   `;
   return result;
 };
@@ -255,34 +268,10 @@ export interface TeamStats {
 
 export type TeamStanding = Team & TeamStats;
 
-export const findTeamsByPoule = async (pouleId: number): Promise<TeamStanding[]> => {
-  const [teams, matches] = await Promise.all([
-    prisma.team.findMany({ where: { pouleId } }),
-    prisma.match.findMany({ where: { pouleId, scoreA: { not: null }, scoreB: { not: null } } }),
-  ]);
-
-  const statsMap = new Map<number, TeamStats>(
-    teams.map((t) => [t.id, { played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0 }])
-  );
-
-  for (const m of matches) {
-    const { teamAId, teamBId, scoreA, scoreB } = m;
-    if (scoreA === null || scoreB === null) continue;
-    if (teamAId) applyMatchToStats(statsMap, teamAId, scoreA, scoreB);
-    if (teamBId) applyMatchToStats(statsMap, teamBId, scoreB, scoreA);
-  }
-
-  const zero = (): TeamStats => ({ played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0 });
-
-  return teams
-    .map((t) => ({ ...t, ...(statsMap.get(t.id) ?? zero()) }))
-    .sort((a, b) =>
-      b.points - a.points ||
-      b.saldo - a.saldo ||
-      b.goalsFor - a.goalsFor ||
-      a.name.localeCompare(b.name)
-    );
-};
+const zeroStats = (): TeamStats => ({
+  played: 0, won: 0, drawn: 0, lost: 0,
+  goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0,
+});
 
 function applyMatchToStats(map: Map<number, TeamStats>, teamId: number, myScore: number, oppScore: number) {
   const s = map.get(teamId);
@@ -296,7 +285,47 @@ function applyMatchToStats(map: Map<number, TeamStats>, teamId: number, myScore:
   else { s.lost++; }
 }
 
+/** Punten en saldo per team, berekend uit de gespeelde wedstrijden.
+ *  Nergens opgeslagen — één bron van waarheid: de scores. */
+export const computeTeamStats = (
+  teamIds: number[],
+  matches: Pick<Match, "teamAId" | "teamBId" | "scoreA" | "scoreB">[]
+): Map<number, TeamStats> => {
+  const statsMap = new Map<number, TeamStats>(teamIds.map((id) => [id, zeroStats()]));
+
+  for (const m of matches) {
+    const { teamAId, teamBId, scoreA, scoreB } = m;
+    if (scoreA === null || scoreB === null) continue;
+    if (teamAId) applyMatchToStats(statsMap, teamAId, scoreA, scoreB);
+    if (teamBId) applyMatchToStats(statsMap, teamBId, scoreB, scoreA);
+  }
+
+  return statsMap;
+};
+
+/** Klassieke volgorde: punten, dan saldo, dan gemaakte punten, dan naam. */
+export const sortStandings = <T extends TeamStats & { name: string }>(teams: T[]): T[] =>
+  [...teams].sort((a, b) =>
+    b.points - a.points ||
+    b.saldo - a.saldo ||
+    b.goalsFor - a.goalsFor ||
+    a.name.localeCompare(b.name)
+  );
+
+export const findTeamsByPoule = async (pouleId: number): Promise<TeamStanding[]> => {
+  const [teams, matches] = await Promise.all([
+    prisma.team.findMany({ where: { pouleId } }),
+    prisma.match.findMany({ where: { pouleId, scoreA: { not: null }, scoreB: { not: null } } }),
+  ]);
+
+  const statsMap = computeTeamStats(teams.map((t) => t.id), matches);
+  return sortStandings(teams.map((t) => ({ ...t, ...(statsMap.get(t.id) ?? zeroStats()) })));
+};
+
 export const deleteKnockoutMatches = (tournamentId: number) =>
   prisma.match.deleteMany({
     where: { tournamentId, phase: { not: "GROUP_STAGE" } },
   });
+
+export const findMatchByBracketPos = (tournamentId: number, bracketPos: string): Promise<Match | null> =>
+  prisma.match.findFirst({ where: { tournamentId, bracketPos } });

@@ -64,8 +64,15 @@ export const createApp = (): Express => {
     })
   );
 
-  // Body parsing middleware
-  app.use(express.json({ limit: "100kb" }));
+  // Body parsing middleware. Teamlogo's komen als data-URI binnen en zijn
+  // groter dan een gewone JSON-body; enkel die ene route krijgt meer ruimte.
+  const standardJson = express.json({ limit: "100kb" });
+  const logoJson = express.json({ limit: "700kb" });
+  app.use((req, res, next) =>
+    req.path.includes("/teams/portal/") && req.path.endsWith("/logo")
+      ? logoJson(req, res, next)
+      : standardJson(req, res, next)
+  );
   app.use(express.urlencoded({ limit: "100kb", extended: true }));
 
   // Request logging middleware

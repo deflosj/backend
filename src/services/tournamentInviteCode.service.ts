@@ -8,7 +8,7 @@ import {
   listTournamentInviteCodes,
   markTournamentCodeUsed,
 } from "../repositories/tournamentInviteCodeRepository";
-import { createTeam, findTournamentById, TeamData } from "../repositories/tournamentRepository";
+import { createTeam, findTournamentById } from "../repositories/tournamentRepository";
 import { findUserById, updateUserRole } from "../repositories/userRepository";
 
 const generateCode = (): string =>
@@ -59,7 +59,10 @@ export const removeTournamentCode = async (
 export interface RedeemCodeInput {
   code: string;
   teamName: string;
-  players: TeamData["players"];
+  speler1?: string;
+  speler2?: string;
+  speler3?: string;
+  speler4?: string;
   logoUrl?: string | null;
 }
 
@@ -75,12 +78,6 @@ export const redeemTournamentCode = async (
   if (record.isUsed) throw new HttpError(400, "This registration code has already been used");
 
   if (!input.teamName?.trim()) throw new HttpError(400, "Team name is required");
-  if (!Array.isArray(input.players) || input.players.length === 0) {
-    throw new HttpError(400, "At least one player is required");
-  }
-  if (input.players.some((p) => !p.name?.trim())) {
-    throw new HttpError(400, "All player names are required");
-  }
 
   // Create the team with the redeeming user as captain
   const team = await createTeam(tournamentId, {
@@ -88,7 +85,10 @@ export const redeemTournamentCode = async (
     logoUrl: input.logoUrl ?? null,
     pouleId: null,
     captainId: userId,
-    players: input.players,
+    speler1: input.speler1?.trim() ?? "",
+    speler2: input.speler2?.trim() ?? "",
+    speler3: input.speler3?.trim() ?? "",
+    speler4: input.speler4?.trim() ?? "",
   });
 
   // Mark the code as used

@@ -1,4 +1,4 @@
-import { Phase, Team } from "@prisma/client";
+import { Match, Phase, Team } from "@prisma/client";
 import { HttpError } from "../utils/httpError";
 import {
   activateTournament,
@@ -23,6 +23,9 @@ import {
   findPoulesWithTeams,
   findTeamById,
   findTeamsByPoule,
+  findMatchByBracketPos,
+  computeTeamStats,
+  TeamStats,
   TeamStanding,
   findTeamsByTournament,
   findTiebreakerByTournament,
@@ -43,20 +46,66 @@ import {
   updateTournamentRules,
 } from "../repositories/tournamentRepository";
 
+// ── Serialisatie ──────────────────────────────────────────────────────────────
+
+const ZERO_STATS: TeamStats = {
+  played: 0, won: 0, drawn: 0, lost: 0,
+  goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0,
+};
+
+/** Een team zoals de frontend het verwacht: platte velden plus de berekende
+ *  stand. `token` en `email` gaan er alleen uit voor wie het toernooi beheert —
+ *  wie de token heeft, kan het team aanpassen. */
+export const serializeTeam = (
+  team: Team,
+  stats: TeamStats = ZERO_STATS,
+  includeSecrets = false
+) => {
+  const { token, email, phone, ...rest } = team;
+  return {
+    ...rest,
+    ...stats,
+    ...(includeSecrets ? { token, email, phone } : {}),
+  };
+};
+
+/** Stand per team, berekend uit de poulewedstrijden van dit toernooi. */
+const statsForTeams = (teams: Team[], matches: Match[]): Map<number, TeamStats> =>
+  computeTeamStats(
+    teams.map((t) => t.id),
+    matches.filter((m) => m.phase === Phase.GROUP_STAGE)
+  );
+
+const serializeTournament = <T extends { teams: Team[]; matches: Match[] }>(
+  tournament: T,
+  includeSecrets: boolean
+) => {
+  const statsMap = statsForTeams(tournament.teams, tournament.matches);
+  return {
+    ...tournament,
+    teams: tournament.teams.map((t) => serializeTeam(t, statsMap.get(t.id) ?? ZERO_STATS, includeSecrets)),
+  };
+};
+
 // ── Tournaments ───────────────────────────────────────────────────────────────
 
 export const listTournaments = () => findAllTournaments();
 
+/** Kale rij, voor intern gebruik (bestaanscontroles, instellingen lezen). */
 export const getTournament = async (id: number) => {
   const t = await findTournamentById(id);
   if (!t) throw new HttpError(404, "Tournament not found");
   return t;
 };
 
-export const getActiveTournament = async () => {
+/** Wat de API teruggeeft: inclusief de berekende standen. */
+export const getTournamentView = async (id: number, includeSecrets = false) =>
+  serializeTournament(await getTournament(id), includeSecrets);
+
+export const getActiveTournament = async (includeSecrets = false) => {
   const t = await findActiveTournament();
   if (!t) throw new HttpError(404, "No active tournament");
-  return t;
+  return serializeTournament(t, includeSecrets);
 };
 
 export const addTournament = (data: TournamentData) => {
@@ -67,7 +116,8 @@ export const addTournament = (data: TournamentData) => {
 
 export const editTournament = async (id: number, data: Partial<TournamentData>) => {
   await getTournament(id);
-  return updateTournament(id, data);
+  await updateTournament(id, data);
+  return getTournamentView(id, true);
 };
 
 export const removeTournament = async (id: number) => {
@@ -119,42 +169,74 @@ export const removePoule = async (id: number) => {
 
 // ── Teams ─────────────────────────────────────────────────────────────────────
 
-export const listTeams = async (tournamentId: number) => {
-  await getTournament(tournamentId);
-  return findTeamsByTournament(tournamentId);
+export const listTeams = async (tournamentId: number, includeSecrets = false) => {
+  const tournament = await getTournament(tournamentId);
+  const statsMap = statsForTeams(tournament.teams, tournament.matches);
+  const teams = await findTeamsByTournament(tournamentId);
+  return teams.map((t) => serializeTeam(t, statsMap.get(t.id) ?? ZERO_STATS, includeSecrets));
 };
 
-export const getTeam = async (id: number) => {
+/** Kale teamrij — intern, en de enige plek waar `token` gewoon meekomt. */
+export const getTeamRow = async (id: number): Promise<Team> => {
   const t = await findTeamById(id);
   if (!t) throw new HttpError(404, "Team not found");
   return t;
 };
 
-export const addTeam = async (tournamentId: number, data: TeamData) => {
-  await getTournament(tournamentId);
-  if (!data.name?.trim()) throw new HttpError(400, "Name is required");
-  if (!Array.isArray(data.players) || data.players.length === 0) {
-    throw new HttpError(400, "At least one player is required");
-  }
-  if (data.players.some((p) => !p.name?.trim())) {
-    throw new HttpError(400, "All player names are required");
-  }
-  return createTeam(tournamentId, data);
+export const getTeam = async (id: number, includeSecrets = false) => {
+  const team = await getTeamRow(id);
+  const tournament = await getTournament(team.tournamentId);
+  const statsMap = statsForTeams(tournament.teams, tournament.matches);
+  return serializeTeam(team, statsMap.get(team.id) ?? ZERO_STATS, includeSecrets);
 };
 
-export const editTeam = async (id: number, data: Partial<TeamData>) => {
-  await getTeam(id);
-  return updateTeam(id, data);
+const trimTeamInput = (data: Partial<TeamData>): Partial<TeamData> => {
+  const out: Partial<TeamData> = { ...data };
+  for (const key of ["name", "captainName", "speler1", "speler2", "speler3", "speler4"] as const) {
+    const value = out[key];
+    if (typeof value === "string") out[key] = value.trim();
+  }
+  if (typeof out.email === "string") out.email = out.email.trim() || null;
+  if (typeof out.phone === "string") out.phone = out.phone.trim() || null;
+  // Betaalwijze: CASH of PAYCONIQ. Een betaalwijze kiezen = betaald;
+  // "niet betaald" wist de betaalwijze.
+  if (out.paymentMethod !== undefined) {
+    const m = out.paymentMethod ? String(out.paymentMethod).toUpperCase() : null;
+    if (m !== null && m !== "CASH" && m !== "PAYCONIQ") throw new HttpError(400, "Ongeldige betaalwijze");
+    out.paymentMethod = m;
+    if (m) out.isPaid = true;
+  }
+  if (out.isPaid === false) out.paymentMethod = null;
+  return out;
+};
+
+export const addTeam = async (tournamentId: number, data: TeamData) => {
+  await getTournament(tournamentId);
+  const clean = trimTeamInput(data) as TeamData;
+  if (!clean.name) throw new HttpError(400, "Name is required");
+  // Spelersnamen zijn bewust optioneel: aan de balie tik je enkel teamnaam,
+  // kapitein en betaald in — de ploeg vult de rest zelf aan via het portaal.
+  const team = await createTeam(tournamentId, clean);
+  return serializeTeam(team, ZERO_STATS, true);
+};
+
+export const editTeam = async (id: number, data: Partial<TeamData>, includeSecrets = true) => {
+  await getTeamRow(id);
+  const clean = trimTeamInput(data);
+  if (clean.name !== undefined && !clean.name) throw new HttpError(400, "Name is required");
+  await updateTeam(id, clean);
+  return getTeam(id, includeSecrets);
 };
 
 export const removeTeam = async (id: number) => {
-  await getTeam(id);
+  await getTeamRow(id);
   return deleteTeam(id);
 };
 
 export const toggleCheckIn = async (id: number, isPresent: boolean) => {
-  await getTeam(id);
-  return checkInTeam(id, isPresent);
+  await getTeamRow(id);
+  await checkInTeam(id, isPresent);
+  return getTeam(id, true);
 };
 
 // ── Matches ───────────────────────────────────────────────────────────────────
@@ -188,10 +270,51 @@ export const removeMatch = async (id: number) => {
   return deleteMatch(id);
 };
 
+/** Waar de winnaar (en bij de halve finales ook de verliezer) van een
+ *  bracketwedstrijd terechtkomt. Sluit aan op de bracketPos-namen die
+ *  `generateKnockout` uitdeelt. */
+const BRACKET_FLOW: Record<string, { winner?: [string, "A" | "B"]; loser?: [string, "A" | "B"] }> = {
+  QF1: { winner: ["SF1", "A"] },
+  QF2: { winner: ["SF1", "B"] },
+  QF3: { winner: ["SF2", "A"] },
+  QF4: { winner: ["SF2", "B"] },
+  SF1: { winner: ["F1", "A"], loser: ["CF1", "A"] },
+  SF2: { winner: ["F1", "B"], loser: ["CF1", "B"] },
+};
+
+const placeInBracket = async (
+  tournamentId: number,
+  target: [string, "A" | "B"],
+  teamId: number | null
+) => {
+  const [bracketPos, slot] = target;
+  const next = await findMatchByBracketPos(tournamentId, bracketPos);
+  if (!next) return;
+  await updateMatch(next.id, slot === "A" ? { teamAId: teamId } : { teamBId: teamId });
+};
+
+/** Zet de winnaar in de volgende ronde. Draait ook bij een verbetering van een
+ *  score opnieuw, zodat een rechtzetting automatisch doorloopt. */
+const propagateKnockout = async (match: Match) => {
+  if (!match.bracketPos) return;
+  const flow = BRACKET_FLOW[match.bracketPos];
+  if (!flow) return;
+
+  const winnerId = match.winnerId;
+  const loserId =
+    winnerId === null ? null : winnerId === match.teamAId ? match.teamBId : match.teamAId;
+
+  if (flow.winner) await placeInBracket(match.tournamentId, flow.winner, winnerId);
+  if (flow.loser) await placeInBracket(match.tournamentId, flow.loser, loserId);
+};
+
 export const recordScore = async (matchId: number, scoreA: number, scoreB: number) => {
   await getMatch(matchId);
+  if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB)) throw new HttpError(400, "Scores must be whole numbers");
   if (scoreA < 0 || scoreB < 0) throw new HttpError(400, "Scores must be non-negative");
-  return scoreMatch(matchId, scoreA, scoreB);
+  const scored = await scoreMatch(matchId, scoreA, scoreB);
+  await propagateKnockout(scored);
+  return scored;
 };
 
 // ── Tiebreaker ────────────────────────────────────────────────────────────────
@@ -450,4 +573,60 @@ export const generateKnockout = async (
 
   await bulkCreateMatches(matchRows);
   return { created: matchRows.length, totalAdvancing };
+};
+
+// ── Zelf aanmelden (publiek, via QR in het café) ──────────────────────────────
+
+export interface SelfRegisterData {
+  name: string;
+  captainName: string;
+  email?: string | null;
+  phone: string;
+  speler1?: string;
+  speler2?: string;
+  speler3?: string;
+  speler4?: string;
+}
+
+/** Een ploeg schrijft zichzelf in voor het actieve toernooi. Geeft enkel de
+ *  portaaltoken terug — daarmee kan de ploeg verder alles zelf aanvullen. */
+export const selfRegisterTeam = async (data: SelfRegisterData): Promise<{ token: string; tournamentId: number }> => {
+  const t = await findActiveTournament();
+  if (!t) throw new HttpError(404, "Er is momenteel geen actief toernooi");
+  if (t.status === "COMPLETED" || t.status === "CANCELLED") {
+    throw new HttpError(400, "Inschrijvingen voor dit toernooi zijn gesloten");
+  }
+  if (t.teamEditDeadline && t.teamEditDeadline.getTime() < Date.now()) {
+    throw new HttpError(400, "De inschrijvingsdeadline is verstreken");
+  }
+
+  const name = String(data.name ?? "").trim().slice(0, 60);
+  const captainName = String(data.captainName ?? "").trim().slice(0, 80);
+  if (!name) throw new HttpError(400, "Teamnaam is verplicht");
+  if (!captainName) throw new HttpError(400, "Naam van de kapitein is verplicht");
+  const phone = String(data.phone ?? "").trim().slice(0, 30);
+  if (phone.replace(/\D/g, "").length < 8) throw new HttpError(400, "Geef een geldig telefoonnummer op");
+  const email = String(data.email ?? "").trim().slice(0, 200);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "Geef een geldig e-mailadres op");
+  if (t.teams.some((x) => x.name.trim().toLowerCase() === name.toLowerCase())) {
+    throw new HttpError(409, "Er bestaat al een team met deze naam");
+  }
+
+  const p = (v?: string) => String(v ?? "").trim().slice(0, 80);
+  const team = await createTeam(t.id, {
+    name,
+    logoUrl: null,
+    pouleId: null,
+    captainId: null,
+    captainName,
+    email,
+    phone,
+    isPaid: false,
+    isPresent: false,
+    speler1: p(data.speler1),
+    speler2: p(data.speler2),
+    speler3: p(data.speler3),
+    speler4: p(data.speler4),
+  } as TeamData);
+  return { token: team.token, tournamentId: t.id };
 };
