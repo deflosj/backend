@@ -17,6 +17,7 @@ import {
   editTeam,
   editTournament,
   generateGroupMatches,
+  generatePoules,
   generateKnockout,
   getActiveTournament,
   getMatch,
@@ -545,6 +546,18 @@ tournamentRouter.post("/:id/tiebreaker/score", ...refereeOrAdmin, validate({ par
 });
 
 // ── Match generation ──────────────────────────────────────────────────────────
+
+tournamentRouter.post("/:id/generate-poules", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { teamsPerPoule, onlyPresent } = req.body ?? {};
+    res.status(201).json(await generatePoules(Number.parseInt(req.params.id, 10), {
+      teamsPerPoule: teamsPerPoule ? Number.parseInt(teamsPerPoule, 10) : undefined,
+      onlyPresent: onlyPresent === true,
+    }));
+  } catch (e) {
+    next(e);
+  }
+});
 
 tournamentRouter.post("/:id/generate-matches", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {

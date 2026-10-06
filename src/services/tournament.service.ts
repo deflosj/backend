@@ -28,6 +28,7 @@ import {
   TeamStats,
   TeamStanding,
   findTeamsByTournament,
+  replaceGroupPoules,
   findTiebreakerByTournament,
   findTournamentById,
   MatchData,
@@ -387,6 +388,56 @@ function buildRoundRobinRounds(teams: Team[]): Array<Array<[Team, Team]>> {
 
   return rounds;
 }
+
+// ── Poule generation ──────────────────────────────────────────────────────────
+
+/** Fisher–Yates: elke volgorde is even waarschijnlijk. */
+const shuffle = <T>(items: T[]): T[] => {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
+/** A, B, …, Z, AA, AB, … */
+const pouleLetter = (index: number): string => {
+  let label = "";
+  for (let n = index; n >= 0; n = Math.floor(n / 26) - 1) {
+    label = String.fromCodePoint(65 + (n % 26)) + label;
+  }
+  return label;
+};
+
+/** Verdeelt de teams willekeurig over nieuwe poules. Het aantal poules is
+ *  ceil(teams / teamsPerPoule); de poules verschillen hoogstens één team in
+ *  grootte. Bestaande poules én poulewedstrijden worden gewist. */
+export const generatePoules = async (
+  tournamentId: number,
+  params: { teamsPerPoule?: number; onlyPresent?: boolean } = {}
+) => {
+  const tournament = await getTournament(tournamentId);
+  const teamsPerPoule = params.teamsPerPoule ?? tournament.teamsPerPoule ?? 4;
+  if (!Number.isInteger(teamsPerPoule) || teamsPerPoule < 2) {
+    throw new HttpError(400, "teamsPerPoule must be an integer of at least 2");
+  }
+
+  const allTeams = await findTeamsByTournament(tournamentId);
+  const teams = params.onlyPresent ? allTeams.filter((t) => t.isPresent) : allTeams;
+  if (teams.length < 2) throw new HttpError(400, "At least 2 teams are needed to generate poules");
+
+  const pouleCount = Math.ceil(teams.length / teamsPerPoule);
+  const groups = Array.from({ length: pouleCount }, (_, i) => ({ name: `Poule ${pouleLetter(i)}`, teamIds: [] as number[] }));
+  shuffle(teams).forEach((team, i) => groups[i % pouleCount].teamIds.push(team.id));
+
+  if (groups.some((g) => g.teamIds.length < 2)) {
+    throw new HttpError(400, "Not enough teams: every poule needs at least 2 teams");
+  }
+
+  await replaceGroupPoules(tournamentId, groups);
+  return { poules: groups.length, teams: teams.length };
+};
 
 export const generateGroupMatches = async (
   tournamentId: number,

@@ -234,6 +234,20 @@ export const findPoulesWithTeams = (tournamentId: number) =>
     orderBy: { name: "asc" },
   });
 
+/** Vervangt alle poules van de groepsfase: oude poulewedstrijden en poules
+ *  verdwijnen, elke groep in `groups` wordt een nieuwe poule met die teams. */
+export const replaceGroupPoules = (tournamentId: number, groups: Array<{ name: string; teamIds: number[] }>) =>
+  prisma.$transaction(async (tx) => {
+    await tx.match.deleteMany({ where: { tournamentId, phase: "GROUP_STAGE" } });
+    await tx.team.updateMany({ where: { tournamentId }, data: { pouleId: null } });
+    await tx.poule.deleteMany({ where: { tournamentId, phase: "GROUP_STAGE" } });
+
+    for (const group of groups) {
+      const poule = await tx.poule.create({ data: { tournamentId, name: group.name, phase: "GROUP_STAGE" } });
+      await tx.team.updateMany({ where: { id: { in: group.teamIds } }, data: { pouleId: poule.id } });
+    }
+  });
+
 export const deleteGroupMatchesByTournament = (tournamentId: number) =>
   prisma.match.deleteMany({ where: { tournamentId, phase: "GROUP_STAGE" } });
 
