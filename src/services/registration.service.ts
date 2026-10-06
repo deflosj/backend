@@ -27,13 +27,13 @@ export const deleteRegistration = async (id: number): Promise<void> => removeReg
 
 export const submitRegistration = async (input: CreateRegistrationInput): Promise<Registration> => {
   const settings = await getRegistrationSettings();
-  if (!settings.isOpen) throw new HttpError(400, "Registrations are currently closed");
+  if (!settings.isOpen) throw new HttpError(400, "De inschrijvingen zijn momenteel gesloten.");
 
   const limit =
     input.raceCategory === "DORPELINGENKOERS" ? settings.dorpelingenkoersLimit : settings.funWedstrijdLimit;
   if (limit !== null && limit !== undefined) {
     const count = await countActiveRegistrationsByCategory(input.raceCategory);
-    if (count >= limit) throw new HttpError(400, "Registration limit reached for this category");
+    if (count >= limit) throw new HttpError(400, "Het maximum aantal inschrijvingen voor deze wedstrijd is bereikt.");
   }
 
   return createRegistration(input);

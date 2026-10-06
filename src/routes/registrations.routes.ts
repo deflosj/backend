@@ -73,6 +73,19 @@ registrationsRouter.get(
   }
 );
 
+// Public: lets the registration form know whether it should be shown
+registrationsRouter.get(
+  "/status",
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { isOpen } = await fetchRegistrationSettings();
+      res.json({ isOpen });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // /settings must be defined before /:id routes so Express doesn't match "settings" as an id
 registrationsRouter.get(
   "/settings",
