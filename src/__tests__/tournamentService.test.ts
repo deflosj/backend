@@ -36,6 +36,7 @@ import {
   findMatchByBracketPos,
   createTeam,
   updateMatch,
+  countUnscoredGroupMatches,
   TeamStanding,
 } from "../repositories/tournamentRepository";
 
@@ -83,6 +84,7 @@ jest.mock("../repositories/tournamentRepository", () => ({
   updateTournament: jest.fn(),
   upsertTiebreaker: jest.fn(),
   updateTournamentRules: jest.fn(),
+  countUnscoredGroupMatches: jest.fn(),
 }));
 
 const repo = {
@@ -107,6 +109,7 @@ const repo = {
   shiftFutureMatchTimes: shiftFutureMatchTimes as jest.Mock,
   createTeam: createTeam as jest.Mock,
   updateMatch: updateMatch as jest.Mock,
+  countUnscoredGroupMatches: countUnscoredGroupMatches as jest.Mock,
 };
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -120,6 +123,7 @@ const fakeTournament = {
   teamsPerPoule: 4,
   teamsAdvancingPerPoule: 2,
   bestNthsAdvancing: 0,
+  trackCount: 6,
   createdAt: new Date("2025-01-01"),
   rules: null,
   rulesUpdatedAt: null,
@@ -167,6 +171,8 @@ const makeTeam = (id: number, overrides: Partial<Team> = {}): Team => ({
   logoUrl: null,
   isPresent: true,
   isPaid: false,
+  paymentMethod: null,
+  phone: null,
   speler1: "Luca",
   speler2: "Tom",
   speler3: "Wout",
@@ -501,14 +507,20 @@ describe("applyDelay", () => {
 // ── generateGroupMatches ──────────────────────────────────────────────────────
 
 describe("generateGroupMatches", () => {
-  const startTime = new Date("2025-06-21T09:00:00");
-  const slotMinutes = 25;
+  const startTime = new Date("2025-10-31T17:00:00");
+  const slotMinutes = 20;
 
-  const poulesWithTeams = (pouleId: number, teamCount: number) => ({
+  const pouleWithTeams = (pouleId: number, teamCount: number) => ({
     ...fakePoule(pouleId),
-    teams: Array.from({ length: teamCount }, (_, i) =>
-      makeTeam(pouleId * 10 + i, { pouleId })
-    ),
+    teams: Array.from({ length: teamCount }, (_, i) => makeTeam(pouleId * 10 + i, { pouleId })),
+  });
+
+  type Planned = { track: number; pouleId: number; scheduledAt: Date; teamAId: number; teamBId: number; tournamentId: number };
+  const created = () => repo.bulkCreateMatches.mock.calls[0][0] as Planned[];
+
+  beforeEach(() => {
+    repo.deleteGroupMatchesByTournament.mockResolvedValue({ count: 0 });
+    repo.bulkCreateMatches.mockResolvedValue({ count: 0 });
   });
 
   it("throws 400 when no group-phase poules exist", async () => {
@@ -520,103 +532,112 @@ describe("generateGroupMatches", () => {
   });
 
   it("throws 400 when a poule has fewer than 2 teams", async () => {
-    repo.findPoulesWithTeams.mockResolvedValue([poulesWithTeams(1, 1)]);
+    repo.findPoulesWithTeams.mockResolvedValue([pouleWithTeams(1, 1)]);
     await expect(generateGroupMatches(1, { startTime, slotMinutes })).rejects.toMatchObject({
       statusCode: 400,
       message: "Every poule must have at least 2 teams",
     });
   });
 
-  it("generates 6 matches for a single poule of 4 teams (round-robin)", async () => {
-    repo.findPoulesWithTeams.mockResolvedValue([poulesWithTeams(1, 4)]);
-    repo.deleteGroupMatchesByTournament.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 6 });
+  it("48 teams in 12 poules on 6 tracks: like 2025 (2 poules per track, 17:00–20:40)", async () => {
+    repo.findPoulesWithTeams.mockResolvedValue(Array.from({ length: 12 }, (_, i) => pouleWithTeams(i + 1, 4)));
 
     const result = await generateGroupMatches(1, { startTime, slotMinutes });
-    expect(result.created).toBe(6);
-    expect(repo.bulkCreateMatches).toHaveBeenCalledWith(
-      expect.arrayContaining([expect.objectContaining({ phase: "GROUP", tournamentId: 1 })])
-    );
-    const matches = repo.bulkCreateMatches.mock.calls[0][0] as unknown[];
-    expect(matches).toHaveLength(6);
+    const ms = created();
+
+    expect(result.created).toBe(72);
+    expect(result.tracksUsed).toBe(6);
+    expect(new Set(ms.map((m) => m.track))).toEqual(new Set([1, 2, 3, 4, 5, 6]));
+    // Baan 1 = poule 1 en 2, baan 6 = poule 11 en 12
+    expect(new Set(ms.filter((m) => m.track === 1).map((m) => m.pouleId))).toEqual(new Set([1, 2]));
+    expect(new Set(ms.filter((m) => m.track === 6).map((m) => m.pouleId))).toEqual(new Set([11, 12]));
+    // Nooit meer dan 6 wedstrijden tegelijk, nooit 2 op dezelfde baan tegelijk
+    const bySlot = new Map<number, Planned[]>();
+    for (const m of ms) bySlot.set(m.scheduledAt.getTime(), [...(bySlot.get(m.scheduledAt.getTime()) ?? []), m]);
+    expect(bySlot.size).toBe(12);
+    for (const slot of bySlot.values()) {
+      expect(slot.length).toBe(6);
+      expect(new Set(slot.map((m) => m.track)).size).toBe(6);
+    }
+    expect(result.lastSlotAt).toEqual(new Date("2025-10-31T20:40:00"));
+    // Poules wisselen af: poule 1 om 17:00, poule 2 om 17:20
+    const track1 = ms.filter((m) => m.track === 1);
+    expect(track1[0].pouleId).toBe(1);
+    expect(track1[1].pouleId).toBe(2);
   });
 
-  it("generates 3 rounds of 2 matches each for 4 teams", async () => {
-    repo.findPoulesWithTeams.mockResolvedValue([poulesWithTeams(1, 4)]);
-    repo.deleteGroupMatchesByTournament.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 6 });
-
+  it("no team plays twice in the same slot", async () => {
+    repo.findPoulesWithTeams.mockResolvedValue(Array.from({ length: 12 }, (_, i) => pouleWithTeams(i + 1, 4)));
     await generateGroupMatches(1, { startTime, slotMinutes });
-
-    const matches = repo.bulkCreateMatches.mock.calls[0][0] as Array<{ time: Date }>;
-    const uniqueTimes = new Set(matches.map((m) => m.time.getTime()));
-    expect(uniqueTimes.size).toBe(3); // 3 distinct round times
+    const seen = new Set<string>();
+    for (const m of created()) {
+      for (const t of [m.teamAId, m.teamBId]) {
+        const key = `${m.scheduledAt.getTime()}-${t}`;
+        expect(seen.has(key)).toBe(false);
+        seen.add(key);
+      }
+    }
   });
 
-  it("generates 12 matches for 2 poules of 4 teams each", async () => {
-    repo.findPoulesWithTeams.mockResolvedValue([
-      poulesWithTeams(1, 4),
-      poulesWithTeams(2, 4),
-    ]);
-    repo.deleteGroupMatchesByTournament.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 12 });
-
-    const result = await generateGroupMatches(1, { startTime, slotMinutes });
-    expect(result.created).toBe(12);
+  it("uses the trackCount override", async () => {
+    repo.findPoulesWithTeams.mockResolvedValue(Array.from({ length: 12 }, (_, i) => pouleWithTeams(i + 1, 4)));
+    const result = await generateGroupMatches(1, { startTime, slotMinutes, trackCount: 4 });
+    expect(result.tracksUsed).toBe(4);
+    expect(Math.max(...created().map((m) => m.track))).toBe(4);
   });
 
-  it("assigns tracks correctly across poules", async () => {
-    repo.findPoulesWithTeams.mockResolvedValue([
-      poulesWithTeams(1, 4),
-      poulesWithTeams(2, 4),
-    ]);
-    repo.deleteGroupMatchesByTournament.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 12 });
-
-    await generateGroupMatches(1, { startTime, slotMinutes, firstTrack: 1 });
-
-    const matches = repo.bulkCreateMatches.mock.calls[0][0] as Array<{ track: number; pouleId: number }>;
-    const poule1Tracks = new Set(matches.filter((m) => m.pouleId === 1).map((m) => m.track));
-    const poule2Tracks = new Set(matches.filter((m) => m.pouleId === 2).map((m) => m.track));
-
-    // Poule 1 should use tracks 1 and 2; poule 2 should use tracks 3 and 4
-    expect(poule1Tracks).toEqual(new Set([1, 2]));
-    expect(poule2Tracks).toEqual(new Set([3, 4]));
-  });
-
-  it("deletes existing group matches before generating new ones", async () => {
-    repo.findPoulesWithTeams.mockResolvedValue([poulesWithTeams(1, 4)]);
-    repo.deleteGroupMatchesByTournament.mockResolvedValue({ count: 3 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 6 });
-
+  it("a poule with spare tracks plays a round in parallel", async () => {
+    repo.findPoulesWithTeams.mockResolvedValue([pouleWithTeams(1, 4), pouleWithTeams(2, 4)]);
     await generateGroupMatches(1, { startTime, slotMinutes });
-    expect(repo.deleteGroupMatchesByTournament).toHaveBeenCalledWith(1);
-
-    const deletionOrder = repo.deleteGroupMatchesByTournament.mock.invocationCallOrder[0];
-    const createOrder = repo.bulkCreateMatches.mock.invocationCallOrder[0];
-    expect(deletionOrder).toBeLessThan(createOrder);
+    const ms = created();
+    expect(ms).toHaveLength(12);
+    expect(new Set(ms.filter((m) => m.pouleId === 1).map((m) => m.track))).toEqual(new Set([1, 2]));
+    expect(new Set(ms.filter((m) => m.pouleId === 2).map((m) => m.track))).toEqual(new Set([4, 5]));
+    expect(new Set(ms.map((m) => m.scheduledAt.getTime())).size).toBe(3);
   });
 
   it("generates 3 matches for a single poule of 3 teams", async () => {
-    repo.findPoulesWithTeams.mockResolvedValue([poulesWithTeams(1, 3)]);
-    repo.deleteGroupMatchesByTournament.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 3 });
-
+    repo.findPoulesWithTeams.mockResolvedValue([pouleWithTeams(1, 3)]);
     const result = await generateGroupMatches(1, { startTime, slotMinutes });
     expect(result.created).toBe(3);
+  });
+
+  it("deletes existing group matches before generating new ones", async () => {
+    repo.findPoulesWithTeams.mockResolvedValue([pouleWithTeams(1, 4)]);
+    await generateGroupMatches(1, { startTime, slotMinutes });
+    expect(repo.deleteGroupMatchesByTournament).toHaveBeenCalledWith(1);
+    expect(repo.deleteGroupMatchesByTournament.mock.invocationCallOrder[0]).toBeLessThan(
+      repo.bulkCreateMatches.mock.invocationCallOrder[0]
+    );
   });
 });
 
 // ── generateKnockout ──────────────────────────────────────────────────────────
 
 describe("generateKnockout", () => {
-  const startTime = new Date("2025-06-21T11:00:00");
-  const slotMinutes = 60;
+  const startTime = new Date("2025-10-31T21:20:00");
+  const slotMinutes = 20;
 
+  type Planned = { bracketPos: string; phase: string; teamAId: number | null; teamBId: number | null; track: number; scheduledAt: Date };
+  const created = () => repo.bulkCreateMatches.mock.calls[0][0] as Planned[];
+
+  /** Poule p: team p*10+i op plaats i, sterkere poules hebben meer saldo. */
   const ranked = (pouleId: number, count: number): TeamStanding[] =>
     Array.from({ length: count }, (_, i) =>
-      makeStanding(pouleId * 10 + i, { pouleId, points: (count - i) * 3 })
+      makeStanding(pouleId * 10 + i, { pouleId, points: (count - i) * 2, saldo: 20 - i * 5 + pouleId, goalsFor: 10 })
     );
+
+  const twelvePoules = () => {
+    repo.findTournamentById.mockResolvedValue({ ...fakeTournament, teamsAdvancingPerPoule: 2, bestNthsAdvancing: 8, trackCount: 6 });
+    repo.findPoulesWithTeams.mockResolvedValue(Array.from({ length: 12 }, (_, i) => fakePoule(i + 1)));
+    for (let p = 1; p <= 12; p++) repo.findTeamsByPoule.mockResolvedValueOnce(ranked(p, 4));
+  };
+
+  beforeEach(() => {
+    repo.countUnscoredGroupMatches.mockResolvedValue(0);
+    repo.deleteKnockoutMatches.mockResolvedValue({ count: 0 });
+    repo.bulkCreateMatches.mockResolvedValue({ count: 0 });
+  });
 
   it("throws 400 when no group-phase poules exist", async () => {
     repo.findPoulesWithTeams.mockResolvedValue([]);
@@ -626,141 +647,136 @@ describe("generateKnockout", () => {
     });
   });
 
-  it("throws 400 when fewer than 2 teams advance in total", async () => {
-    const tournament = { ...fakeTournament, teamsAdvancingPerPoule: 1, bestNthsAdvancing: 0 };
-    repo.findTournamentById.mockResolvedValue(tournament);
-    repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1)]);
-    repo.findTeamsByPoule.mockResolvedValue([makeTeam(1)]);
+  it("refuses while group matches are unscored, unless forced", async () => {
+    twelvePoules();
+    repo.countUnscoredGroupMatches.mockResolvedValue(3);
+    await expect(generateKnockout(1, { startTime, slotMinutes })).rejects.toMatchObject({ statusCode: 409 });
+    expect(repo.bulkCreateMatches).not.toHaveBeenCalled();
 
+    twelvePoules();
+    await generateKnockout(1, { startTime, slotMinutes, force: true });
+    expect(repo.bulkCreateMatches).toHaveBeenCalled();
+  });
+
+  it("throws 400 when fewer than 2 teams advance in total", async () => {
+    repo.findTournamentById.mockResolvedValue({ ...fakeTournament, teamsAdvancingPerPoule: 1, bestNthsAdvancing: 0 });
+    repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1)]);
+    repo.findTeamsByPoule.mockResolvedValue([makeStanding(1)]);
     await expect(generateKnockout(1, { startTime, slotMinutes })).rejects.toMatchObject({
       statusCode: 400,
       message: "Not enough advancing teams to generate knockout",
     });
   });
 
-  it("throws 400 when more than 8 teams would advance", async () => {
-    const tournament = { ...fakeTournament, teamsAdvancingPerPoule: 4, bestNthsAdvancing: 0 };
-    repo.findTournamentById.mockResolvedValue(tournament);
+  it("throws 400 when more than 32 teams would advance", async () => {
+    repo.findTournamentById.mockResolvedValue({ ...fakeTournament, teamsAdvancingPerPoule: 3, bestNthsAdvancing: 0 });
+    repo.findPoulesWithTeams.mockResolvedValue(Array.from({ length: 12 }, (_, i) => fakePoule(i + 1)));
+    for (let p = 1; p <= 12; p++) repo.findTeamsByPoule.mockResolvedValueOnce(ranked(p, 4));
+    await expect(generateKnockout(1, { startTime, slotMinutes })).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("48 teams → 32: full bracket R32 → F1 + CF1", async () => {
+    twelvePoules();
+    const result = await generateKnockout(1, { startTime, slotMinutes });
+    const ms = created();
+
+    expect(result.totalAdvancing).toBe(32);
+    expect(ms.filter((m) => m.phase === "ROUND_OF_32")).toHaveLength(16);
+    expect(ms.filter((m) => m.phase === "ROUND_OF_16")).toHaveLength(8);
+    expect(ms.filter((m) => m.phase === "QUARTER_FINAL")).toHaveLength(4);
+    expect(ms.filter((m) => m.phase === "SEMI_FINAL")).toHaveLength(2);
+    expect(ms.map((m) => m.bracketPos)).toEqual(expect.arrayContaining(["R32-1", "R32-16", "R16-8", "QF4", "SF2", "F1", "CF1"]));
+    // Enkel de eerste ronde is ingevuld
+    expect(ms.filter((m) => m.phase === "ROUND_OF_32").every((m) => m.teamAId && m.teamBId)).toBe(true);
+    expect(ms.filter((m) => m.phase !== "ROUND_OF_32").every((m) => !m.teamAId && !m.teamBId)).toBe(true);
+  });
+
+  it("seeds: all 1sts, all 2nds, 8 best 3rds; no same-poule match in R32", async () => {
+    twelvePoules();
+    const result = await generateKnockout(1, { startTime, slotMinutes });
+    const seeds = result.seeds;
+    // 12 eersten (id eindigt op 0), 12 tweedes (1), 8 derdes (2)
+    expect(seeds.slice(0, 12).every((s) => s.teamId % 10 === 0)).toBe(true);
+    expect(seeds.slice(12, 24).every((s) => s.teamId % 10 === 1)).toBe(true);
+    expect(seeds.slice(24).every((s) => s.teamId % 10 === 2)).toBe(true);
+    // Sterkste derdes: hoogste saldo = hoogste poulenummer
+    expect(seeds.slice(24).map((s) => s.pouleId).sort((a, b) => a - b)).toEqual([5, 6, 7, 8, 9, 10, 11, 12]);
+
+    for (const m of created().filter((x) => x.phase === "ROUND_OF_32")) {
+      expect(Math.floor((m.teamAId as number) / 10)).not.toBe(Math.floor((m.teamBId as number) / 10));
+    }
+    // Seed 1 (R32-1) speelt tegen een derde
+    const r1 = created().find((m) => m.bracketPos === "R32-1")!;
+    expect(r1.teamAId).toBe(seeds[0].teamId);
+    expect((r1.teamBId as number) % 10).toBe(2);
+  });
+
+  it("schedules each round after the previous one on max trackCount tracks", async () => {
+    twelvePoules();
+    await generateKnockout(1, { startTime, slotMinutes, breakMinutes: 10 });
+    const ms = created();
+    const times = (phase: string) => [...new Set(ms.filter((m) => m.phase === phase).map((m) => m.scheduledAt.toISOString()))];
+    expect(Math.max(...ms.map((m) => m.track))).toBe(6);
+    // 16 wedstrijden / 6 banen = 3 slots: 21:20, 21:40, 22:00
+    expect(times("ROUND_OF_32")).toHaveLength(3);
+    // R16 start na 3 slots + 10 min pauze = 22:30
+    expect(times("ROUND_OF_16")[0]).toBe(new Date("2025-10-31T22:30:00").toISOString());
+    // Finale en kleine finale tegelijk, op verschillende banen
+    const f = ms.find((m) => m.bracketPos === "F1")!;
+    const cf = ms.find((m) => m.bracketPos === "CF1")!;
+    expect(f.scheduledAt).toEqual(cf.scheduledAt);
+    expect(f.track).not.toBe(cf.track);
+  });
+
+  it("byes: 6 teams → top 2 seeds go straight to the semi-finals", async () => {
+    repo.findTournamentById.mockResolvedValue({ ...fakeTournament, teamsAdvancingPerPoule: 2, bestNthsAdvancing: 0 });
     repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1), fakePoule(2), fakePoule(3)]);
-    repo.findTeamsByPoule
-      .mockResolvedValueOnce(ranked(1, 5))
-      .mockResolvedValueOnce(ranked(2, 5))
-      .mockResolvedValueOnce(ranked(3, 5));
-    repo.deleteKnockoutMatches.mockResolvedValue({ count: 0 });
-
-    await expect(generateKnockout(1, { startTime, slotMinutes })).rejects.toMatchObject({
-      statusCode: 400,
-    });
-  });
-
-  it("generates semi-final structure (SF1, SF2, CF1, F1) for 4 advancing teams", async () => {
-    const tournament = { ...fakeTournament, teamsAdvancingPerPoule: 2, bestNthsAdvancing: 0 };
-    repo.findTournamentById.mockResolvedValue(tournament);
-    repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1), fakePoule(2)]);
-    repo.findTeamsByPoule
-      .mockResolvedValueOnce(ranked(1, 4)) // Poule A: top 2 advance
-      .mockResolvedValueOnce(ranked(2, 4)); // Poule B: top 2 advance
-    repo.deleteKnockoutMatches.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 4 });
-
+    for (let p = 1; p <= 3; p++) repo.findTeamsByPoule.mockResolvedValueOnce(ranked(p, 4));
     const result = await generateKnockout(1, { startTime, slotMinutes });
-    expect(result.created).toBe(4);
-    expect(result.totalAdvancing).toBe(4);
-
-    expect(repo.bulkCreateMatches).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ phase: "SEMI", bracketPos: "SF1" }),
-        expect.objectContaining({ phase: "SEMI", bracketPos: "SF2" }),
-        expect.objectContaining({ phase: "CONSOLATION_FINAL", bracketPos: "CF1" }),
-        expect.objectContaining({ phase: "FINAL", bracketPos: "F1" }),
-      ])
-    );
-  });
-
-  it("semi-finals cross-bracket: SF1 is poule-A-1st vs poule-B-2nd", async () => {
-    const tournament = { ...fakeTournament, teamsAdvancingPerPoule: 2, bestNthsAdvancing: 0 };
-    repo.findTournamentById.mockResolvedValue(tournament);
-    repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1), fakePoule(2)]);
-
-    const pouleATeams = ranked(1, 4); // ids: 10, 11, 12, 13
-    const pouleBTeams = ranked(2, 4); // ids: 20, 21, 22, 23
-    repo.findTeamsByPoule
-      .mockResolvedValueOnce(pouleATeams)
-      .mockResolvedValueOnce(pouleBTeams);
-    repo.deleteKnockoutMatches.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 4 });
-
-    await generateKnockout(1, { startTime, slotMinutes });
-
-    const sf1 = (repo.bulkCreateMatches.mock.calls[0][0] as Array<{
-      bracketPos: string;
-      teamAId: number | null;
-      teamBId: number | null;
-    }>).find((m) => m.bracketPos === "SF1");
-
-    expect(sf1).toBeDefined();
-    expect(sf1?.teamAId).toBe(pouleATeams[0].id); // Poule A 1st
-    expect(sf1?.teamBId).toBe(pouleBTeams[1].id); // Poule B 2nd
-  });
-
-  it("generates quarter-final structure for 8 advancing teams", async () => {
-    const tournament = { ...fakeTournament, teamsAdvancingPerPoule: 4, bestNthsAdvancing: 0 };
-    repo.findTournamentById.mockResolvedValue(tournament);
-    repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1), fakePoule(2)]);
-    repo.findTeamsByPoule
-      .mockResolvedValueOnce(ranked(1, 4))
-      .mockResolvedValueOnce(ranked(2, 4));
-    repo.deleteKnockoutMatches.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 8 });
-
-    const result = await generateKnockout(1, { startTime, slotMinutes });
-    expect(result.created).toBe(8);
-    expect(result.totalAdvancing).toBe(8);
-
-    expect(repo.bulkCreateMatches).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ phase: "QUARTER", bracketPos: "QF1" }),
-        expect.objectContaining({ phase: "QUARTER", bracketPos: "QF2" }),
-        expect.objectContaining({ phase: "QUARTER", bracketPos: "QF3" }),
-        expect.objectContaining({ phase: "QUARTER", bracketPos: "QF4" }),
-        expect.objectContaining({ phase: "SEMI", bracketPos: "SF1" }),
-        expect.objectContaining({ phase: "SEMI", bracketPos: "SF2" }),
-        expect.objectContaining({ phase: "CONSOLATION_FINAL", bracketPos: "CF1" }),
-        expect.objectContaining({ phase: "FINAL", bracketPos: "F1" }),
-      ])
-    );
-  });
-
-  it("includes best Nth-place finishers when bestNthsAdvancing > 0", async () => {
-    // 2 poules × 1 advancing + 1 best 2nd = 3 total → semi-final structure
-    const tournament = { ...fakeTournament, teamsAdvancingPerPoule: 1, bestNthsAdvancing: 1 };
-    repo.findTournamentById.mockResolvedValue(tournament);
-    repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1), fakePoule(2)]);
-    repo.findTeamsByPoule
-      .mockResolvedValueOnce(ranked(1, 3)) // Poule A: 3 teams; 1st advances, 2nd eligible for best-Nth
-      .mockResolvedValueOnce(ranked(2, 3)); // Poule B: same
-    repo.deleteKnockoutMatches.mockResolvedValue({ count: 0 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 3 });
-
-    const result = await generateKnockout(1, { startTime, slotMinutes });
-    expect(result.totalAdvancing).toBe(3); // 2 firsts + 1 best second
+    const ms = created();
+    expect(ms.filter((m) => m.phase === "QUARTER_FINAL")).toHaveLength(2);
+    const placed = ms.filter((m) => m.phase === "SEMI_FINAL").flatMap((m) => [m.teamAId, m.teamBId]).filter(Boolean);
+    expect(placed.sort()).toEqual([result.seeds[0].teamId, result.seeds[1].teamId].sort());
   });
 
   it("deletes existing knockout matches before generating new ones", async () => {
-    const tournament = { ...fakeTournament, teamsAdvancingPerPoule: 2, bestNthsAdvancing: 0 };
-    repo.findTournamentById.mockResolvedValue(tournament);
-    repo.findPoulesWithTeams.mockResolvedValue([fakePoule(1), fakePoule(2)]);
-    repo.findTeamsByPoule
-      .mockResolvedValueOnce(ranked(1, 4))
-      .mockResolvedValueOnce(ranked(2, 4));
-    repo.deleteKnockoutMatches.mockResolvedValue({ count: 4 });
-    repo.bulkCreateMatches.mockResolvedValue({ count: 4 });
-
+    twelvePoules();
     await generateKnockout(1, { startTime, slotMinutes });
     expect(repo.deleteKnockoutMatches).toHaveBeenCalledWith(1);
+    expect(repo.deleteKnockoutMatches.mock.invocationCallOrder[0]).toBeLessThan(
+      repo.bulkCreateMatches.mock.invocationCallOrder[0]
+    );
+  });
+});
 
-    const deletionOrder = repo.deleteKnockoutMatches.mock.invocationCallOrder[0];
-    const createOrder = repo.bulkCreateMatches.mock.invocationCallOrder[0];
-    expect(deletionOrder).toBeLessThan(createOrder);
+// ── Bracket doorschuiven ──────────────────────────────────────────────────────
+
+describe("recordScore in the knockout", () => {
+  it("moves the winner of R32-3 to R16-2 slot A", async () => {
+    const m = { ...fakeMatch, id: 5, phase: "ROUND_OF_32", bracketPos: "R32-3", teamAId: 7, teamBId: 8 };
+    repo.findMatchById.mockResolvedValue(m);
+    repo.scoreMatch.mockResolvedValue({ ...m, scoreA: 13, scoreB: 4, winnerId: 7 });
+    repo.findMatchByBracketPos.mockResolvedValue({ id: 99 });
+    await recordScore(5, 13, 4);
+    expect(repo.findMatchByBracketPos).toHaveBeenCalledWith(1, "R16-2");
+    expect(repo.updateMatch).toHaveBeenCalledWith(99, { teamAId: 7 });
+  });
+
+  it("semi-final loser goes to the consolation final", async () => {
+    const m = { ...fakeMatch, id: 6, phase: "SEMI_FINAL", bracketPos: "SF2", teamAId: 7, teamBId: 8 };
+    repo.findMatchById.mockResolvedValue(m);
+    repo.scoreMatch.mockResolvedValue({ ...m, scoreA: 2, scoreB: 13, winnerId: 8 });
+    repo.findMatchByBracketPos.mockResolvedValueOnce({ id: 100 }).mockResolvedValueOnce({ id: 101 });
+    await recordScore(6, 2, 13);
+    expect(repo.findMatchByBracketPos).toHaveBeenNthCalledWith(1, 1, "F1");
+    expect(repo.updateMatch).toHaveBeenCalledWith(100, { teamBId: 8 });
+    expect(repo.findMatchByBracketPos).toHaveBeenNthCalledWith(2, 1, "CF1");
+    expect(repo.updateMatch).toHaveBeenCalledWith(101, { teamBId: 7 });
+  });
+
+  it("rejects a draw in a knockout match", async () => {
+    repo.findMatchById.mockResolvedValue({ ...fakeMatch, bracketPos: "QF1" });
+    await expect(recordScore(1, 5, 5)).rejects.toMatchObject({ statusCode: 400 });
+    expect(repo.scoreMatch).not.toHaveBeenCalled();
   });
 });

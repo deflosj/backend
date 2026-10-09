@@ -26,7 +26,6 @@ import {
   findMatchByBracketPos,
   computeTeamStats,
   TeamStats,
-  TeamStanding,
   findTeamsByTournament,
   replaceGroupPoules,
   findTiebreakerByTournament,
@@ -45,7 +44,15 @@ import {
   updateTournament,
   upsertTiebreaker,
   updateTournamentRules,
+  countUnscoredGroupMatches,
 } from "../repositories/tournamentRepository";
+import {
+  buildKnockout,
+  MAX_KNOCKOUT_TEAMS,
+  nextBracketSlot,
+  rankQualifiers,
+  scheduleGroupStage,
+} from "./tournamentScheduling";
 
 // ── Serialisatie ──────────────────────────────────────────────────────────────
 
@@ -88,6 +95,14 @@ const serializeTournament = <T extends { teams: Team[]; matches: Match[] }>(
   };
 };
 
+const parsePositiveInt = (value: unknown, field: string, min = 1, max = 1000): number => {
+  const n = typeof value === "number" ? value : Number.parseInt(String(value), 10);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw new HttpError(400, `${field} must be a whole number between ${min} and ${max}`);
+  }
+  return n;
+};
+
 // ── Tournaments ───────────────────────────────────────────────────────────────
 
 export const listTournaments = () => findAllTournaments();
@@ -112,7 +127,16 @@ export const getActiveTournament = async (includeSecrets = false) => {
 export const addTournament = (data: TournamentData) => {
   if (!data.name?.trim()) throw new HttpError(400, "Name is required");
   if (!data.year || data.year < 2000) throw new HttpError(400, "Valid year is required");
-  return createTournament({ name: data.name.trim(), year: data.year });
+  const optionalInt = (v: unknown, field: string, min: number, max: number) =>
+    v === undefined || v === null || v === "" ? null : parsePositiveInt(v, field, min, max);
+  return createTournament({
+    name: data.name.trim(),
+    year: data.year,
+    teamsPerPoule: optionalInt(data.teamsPerPoule, "teamsPerPoule", 2, 16),
+    teamsAdvancingPerPoule: optionalInt(data.teamsAdvancingPerPoule, "teamsAdvancingPerPoule", 1, 16),
+    bestNthsAdvancing: optionalInt(data.bestNthsAdvancing, "bestNthsAdvancing", 0, 64),
+    trackCount: optionalInt(data.trackCount, "trackCount", 1, 40) ?? 6,
+  });
 };
 
 export const editTournament = async (id: number, data: Partial<TournamentData>) => {
@@ -271,18 +295,6 @@ export const removeMatch = async (id: number) => {
   return deleteMatch(id);
 };
 
-/** Waar de winnaar (en bij de halve finales ook de verliezer) van een
- *  bracketwedstrijd terechtkomt. Sluit aan op de bracketPos-namen die
- *  `generateKnockout` uitdeelt. */
-const BRACKET_FLOW: Record<string, { winner?: [string, "A" | "B"]; loser?: [string, "A" | "B"] }> = {
-  QF1: { winner: ["SF1", "A"] },
-  QF2: { winner: ["SF1", "B"] },
-  QF3: { winner: ["SF2", "A"] },
-  QF4: { winner: ["SF2", "B"] },
-  SF1: { winner: ["F1", "A"], loser: ["CF1", "A"] },
-  SF2: { winner: ["F1", "B"], loser: ["CF1", "B"] },
-};
-
 const placeInBracket = async (
   tournamentId: number,
   target: [string, "A" | "B"],
@@ -298,7 +310,7 @@ const placeInBracket = async (
  *  score opnieuw, zodat een rechtzetting automatisch doorloopt. */
 const propagateKnockout = async (match: Match) => {
   if (!match.bracketPos) return;
-  const flow = BRACKET_FLOW[match.bracketPos];
+  const flow = nextBracketSlot(match.bracketPos);
   if (!flow) return;
 
   const winnerId = match.winnerId;
@@ -310,9 +322,13 @@ const propagateKnockout = async (match: Match) => {
 };
 
 export const recordScore = async (matchId: number, scoreA: number, scoreB: number) => {
-  await getMatch(matchId);
+  const match = await getMatch(matchId);
   if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB)) throw new HttpError(400, "Scores must be whole numbers");
   if (scoreA < 0 || scoreB < 0) throw new HttpError(400, "Scores must be non-negative");
+  // In de knock-out moet er een winnaar zijn, anders kan niemand doorschuiven.
+  if (match.bracketPos && scoreA === scoreB) {
+    throw new HttpError(400, "Een knock-outwedstrijd kan niet gelijk eindigen");
+  }
   const scored = await scoreMatch(matchId, scoreA, scoreB);
   await propagateKnockout(scored);
   return scored;
@@ -347,47 +363,6 @@ export const recordTiebreakerScore = async (
   if (score < 0) throw new HttpError(400, "Score must be non-negative");
   return setTiebreakerScore(tb.id, teamId, score);
 };
-
-// ── Match generation ──────────────────────────────────────────────────────────
-
-function buildRoundRobinRounds(teams: Team[]): Array<Array<[Team, Team]>> {
-  const n = teams.length;
-  if (n < 2) return [];
-
-  if (n === 4) {
-    return [
-      [[teams[0], teams[2]], [teams[1], teams[3]]],
-      [[teams[0], teams[1]], [teams[2], teams[3]]],
-      [[teams[0], teams[3]], [teams[1], teams[2]]],
-    ];
-  }
-
-  // General circle method for any even/odd team count
-  const circle: (Team | null)[] = [...teams];
-  const hasBye = n % 2 !== 0;
-  if (hasBye) circle.push(null);
-
-  const size = circle.length;
-  const fixed = circle[0];
-  let rotating = circle.slice(1);
-  const rounds: Array<Array<[Team, Team]>> = [];
-
-  for (let r = 0; r < size - 1; r++) {
-    const round: Array<[Team, Team]> = [];
-    const a = fixed, b = rotating[0];
-    if (a !== null && b !== null) round.push([a, b]);
-
-    for (let i = 1; i <= Math.floor((size - 1) / 2); i++) {
-      const x = rotating[i], y = rotating[size - 1 - i];
-      if (x !== null && y !== null) round.push([x, y]);
-    }
-
-    rounds.push(round);
-    rotating = [...rotating.slice(-1), ...rotating.slice(0, -1)];
-  }
-
-  return rounds;
-}
 
 // ── Poule generation ──────────────────────────────────────────────────────────
 
@@ -439,66 +414,37 @@ export const generatePoules = async (
   return { poules: groups.length, teams: teams.length };
 };
 
+/** Plant alle poulewedstrijden over de banen van het terrein. Poules die een
+ *  baan delen spelen om beurten (zoals in 2025: baan 1 = poule A en B), zodat
+ *  er nooit meer wedstrijden tegelijk zijn dan er banen zijn. */
 export const generateGroupMatches = async (
   tournamentId: number,
-  params: { startTime: Date; slotMinutes: number; firstTrack?: number }
+  params: { startTime: Date; slotMinutes: number; trackCount?: number }
 ) => {
-  await getTournament(tournamentId);
+  const tournament = await getTournament(tournamentId);
   const poules = await findPoulesWithTeams(tournamentId);
 
   if (poules.length === 0) throw new HttpError(400, "No group-phase poules found");
   if (poules.some((p) => p.teams.length < 2)) throw new HttpError(400, "Every poule must have at least 2 teams");
+  if (Number.isNaN(params.startTime.getTime())) throw new HttpError(400, "startTime is invalid");
+
+  const slotMinutes = parsePositiveInt(params.slotMinutes, "slotMinutes", 5, 180);
+  const trackCount = parsePositiveInt(params.trackCount ?? tournament.trackCount, "trackCount", 1, 40);
+
+  const planned = scheduleGroupStage(
+    poules.map((p) => ({ id: p.id, teamIds: p.teams.map((t) => t.id) })),
+    { startTime: params.startTime, slotMinutes, trackCount }
+  );
 
   await deleteGroupMatchesByTournament(tournamentId);
+  await bulkCreateMatches(planned.map((m) => ({ ...m, tournamentId })));
 
-  const slotMs = params.slotMinutes * 60 * 1000;
-  let nextTrack = params.firstTrack ?? 1;
-  const matchRows: Parameters<typeof bulkCreateMatches>[0] = [];
-
-  // Track how many simultaneous slots we need across all poules per round
-  // All poules play round 1 simultaneously, round 2 simultaneously, etc.
-  // Tracks are assigned: poule 0 gets tracks [T, T+1], poule 1 gets [T+2, T+3], etc.
-
-  const pouleTrackStart: number[] = [];
-  for (const poule of poules) {
-    const tracksNeeded = Math.floor(poule.teams.length / 2);
-    pouleTrackStart.push(nextTrack);
-    nextTrack += tracksNeeded;
-  }
-
-  // Determine max rounds across all poules
-  const allRounds = poules.map((p) => buildRoundRobinRounds(p.teams));
-  const maxRounds = Math.max(...allRounds.map((r) => r.length));
-
-  for (let roundIdx = 0; roundIdx < maxRounds; roundIdx++) {
-    const roundTime = new Date(params.startTime.getTime() + roundIdx * slotMs);
-
-    for (let pouleIdx = 0; pouleIdx < poules.length; pouleIdx++) {
-      const poule = poules[pouleIdx];
-      const rounds = allRounds[pouleIdx];
-      if (roundIdx >= rounds.length) continue;
-
-      const matchPairs = rounds[roundIdx];
-      const trackBase = pouleTrackStart[pouleIdx];
-
-      for (let matchIdx = 0; matchIdx < matchPairs.length; matchIdx++) {
-        const [teamA, teamB] = matchPairs[matchIdx];
-        matchRows.push({
-          tournamentId,
-          pouleId: poule.id,
-          teamAId: teamA.id,
-          teamBId: teamB.id,
-          scheduledAt: roundTime,
-          track: trackBase + matchIdx,
-          phase: Phase.GROUP_STAGE,
-          bracketPos: null,
-        });
-      }
-    }
-  }
-
-  await bulkCreateMatches(matchRows);
-  return { created: matchRows.length };
+  const end = planned.reduce((max, m) => Math.max(max, m.scheduledAt.getTime()), 0);
+  return {
+    created: planned.length,
+    tracksUsed: new Set(planned.map((m) => m.track)).size,
+    lastSlotAt: end ? new Date(end) : null,
+  };
 };
 
 // ── Delay ────────────────────────────────────────────────────────────────────
@@ -512,118 +458,75 @@ export const applyDelay = async (tournamentId: number, minutes: number) => {
 
 // ── Knockout generation ───────────────────────────────────────────────────────
 
+/** Knock-out: de beste teams worden over alle poules heen gerangschikt
+ *  (eersten, dan tweedes, dan de beste n-des) en klassiek gekoppeld: 1 vs 32,
+ *  2 vs 31, … — nooit twee teams uit dezelfde poule in de eerste ronde.
+ *  Latere rondes worden als lege (TBD) wedstrijden aangemaakt en vullen zich
+ *  automatisch wanneer een score wordt ingegeven. */
 export const generateKnockout = async (
   tournamentId: number,
-  params: { startTime: Date; slotMinutes: number }
+  params: {
+    startTime: Date;
+    slotMinutes: number;
+    breakMinutes?: number;
+    trackCount?: number;
+    withConsolation?: boolean;
+    force?: boolean;
+  }
 ) => {
   const tournament = await getTournament(tournamentId);
-
-  const teamsAdvancing = tournament.teamsAdvancingPerPoule ?? 2;
-  const bestNths = tournament.bestNthsAdvancing ?? 0;
+  if (Number.isNaN(params.startTime.getTime())) throw new HttpError(400, "startTime is invalid");
+  const slotMinutes = parsePositiveInt(params.slotMinutes, "slotMinutes", 5, 180);
+  const breakMinutes = parsePositiveInt(params.breakMinutes ?? 0, "breakMinutes", 0, 240);
+  const trackCount = parsePositiveInt(params.trackCount ?? tournament.trackCount, "trackCount", 1, 40);
 
   const poules = await findPoulesWithTeams(tournamentId);
   if (poules.length === 0) throw new HttpError(400, "No group-phase poules found");
 
-  // Rank teams per poule
-  const pouleStandings: TeamStanding[][] = await Promise.all(
-    poules.map((p) => findTeamsByPoule(p.id))
-  );
-
-  // Collect advancing teams per poule (top N)
-  const advancingByPoule: TeamStanding[][] = pouleStandings.map((standing) =>
-    standing.slice(0, teamsAdvancing)
-  );
-
-  // Collect best Nth-place finishers (position = teamsAdvancing, 0-indexed)
-  let extraTeams: TeamStanding[] = [];
-  if (bestNths > 0) {
-    const nthPlace = pouleStandings
-      .map((standing) => standing[teamsAdvancing] ?? null)
-      .filter((t): t is TeamStanding => t !== null)
-      .sort((a, b) => b.points - a.points || b.saldo - a.saldo || b.goalsFor - a.goalsFor)
-      .slice(0, bestNths);
-    extraTeams = nthPlace;
+  if (!params.force) {
+    const open = await countUnscoredGroupMatches(tournamentId);
+    if (open > 0) {
+      throw new HttpError(409, `Nog ${open} poulewedstrijd${open === 1 ? "" : "en"} zonder score`);
+    }
   }
 
-  const totalAdvancing = advancingByPoule.flat().length + extraTeams.length;
-  if (totalAdvancing < 2) throw new HttpError(400, "Not enough advancing teams to generate knockout");
+  const standings = await Promise.all(poules.map((p) => findTeamsByPoule(p.id)));
+  const seeds = rankQualifiers(
+    standings.map((s) =>
+      s.map((t) => ({
+        teamId: t.id,
+        pouleId: t.pouleId ?? 0,
+        points: t.points,
+        saldo: t.saldo,
+        goalsFor: t.goalsFor,
+        name: t.name,
+      }))
+    ),
+    tournament.teamsAdvancingPerPoule ?? 2,
+    tournament.bestNthsAdvancing ?? 0
+  );
+
+  if (seeds.length < 2) throw new HttpError(400, "Not enough advancing teams to generate knockout");
+  if (seeds.length > MAX_KNOCKOUT_TEAMS) {
+    throw new HttpError(400, `Maximaal ${MAX_KNOCKOUT_TEAMS} teams in de knock-out (nu ${seeds.length})`);
+  }
+
+  const planned = buildKnockout(seeds, {
+    startTime: params.startTime,
+    slotMinutes,
+    breakMinutes,
+    trackCount,
+    withConsolation: params.withConsolation ?? true,
+  });
 
   await deleteKnockoutMatches(tournamentId);
+  await bulkCreateMatches(planned.map((m) => ({ ...m, tournamentId })));
 
-  const slotMs = params.slotMinutes * 60 * 1000;
-  const matchRows: Parameters<typeof bulkCreateMatches>[0] = [];
-
-  if (totalAdvancing <= 4) {
-    // Semi-final structure
-    // SF: 1A vs 2B, 1B vs 2A (cross-bracket)
-    // CF + Final: empty placeholders
-    const numPoules = advancingByPoule.length;
-    const sfTime = params.startTime;
-    const cfTime = new Date(params.startTime.getTime() + 2 * slotMs);
-    const fTime = new Date(params.startTime.getTime() + 3 * slotMs);
-
-    for (let i = 0; i < Math.floor(totalAdvancing / 2); i++) {
-      const pouleA = advancingByPoule[i % numPoules] ?? [];
-      const pouleB = advancingByPoule[(i + 1) % numPoules] ?? [];
-      matchRows.push({
-        tournamentId,
-        pouleId: null,
-        teamAId: pouleA[0]?.id ?? null,
-        teamBId: pouleB[1]?.id ?? null,
-        scheduledAt: sfTime,
-        track: i + 1,
-        phase: Phase.SEMI_FINAL,
-        bracketPos: `SF${i + 1}`,
-      });
-    }
-
-    matchRows.push(
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: cfTime, track: 1, phase: Phase.CONSOLATION_FINAL, bracketPos: "CF1" },
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: fTime, track: 1, phase: Phase.FINAL, bracketPos: "F1" },
-    );
-
-  } else if (totalAdvancing <= 8) {
-    // Quarter-final structure
-    const allAdvancing = [...advancingByPoule.flat(), ...extraTeams];
-    const qfTime = params.startTime;
-    const sfTime = new Date(params.startTime.getTime() + slotMs);
-    const cfTime = new Date(params.startTime.getTime() + 2 * slotMs);
-    const fTime = new Date(params.startTime.getTime() + 3 * slotMs);
-
-    // Pair: 1st vs last, 2nd vs second-to-last, etc.
-    const half = Math.ceil(allAdvancing.length / 2);
-    for (let i = 0; i < half; i++) {
-      matchRows.push({
-        tournamentId, pouleId: null,
-        teamAId: allAdvancing[i]?.id ?? null,
-        teamBId: allAdvancing[allAdvancing.length - 1 - i]?.id ?? null,
-        scheduledAt: qfTime, track: i + 1,
-        phase: Phase.QUARTER_FINAL,
-        bracketPos: `QF${i + 1}`,
-      });
-    }
-
-    for (let i = 0; i < 2; i++) {
-      matchRows.push({
-        tournamentId, pouleId: null,
-        teamAId: null, teamBId: null,
-        scheduledAt: sfTime, track: i + 1,
-        phase: Phase.SEMI_FINAL,
-        bracketPos: `SF${i + 1}`,
-      });
-    }
-
-    matchRows.push(
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: cfTime, track: 1, phase: Phase.CONSOLATION_FINAL, bracketPos: "CF1" },
-      { tournamentId, pouleId: null, teamAId: null, teamBId: null, scheduledAt: fTime, track: 1, phase: Phase.FINAL, bracketPos: "F1" },
-    );
-
-  } else {
-    throw new HttpError(400, "Knockout generation only supports up to 8 advancing teams");
-  }
-
-  await bulkCreateMatches(matchRows);
-  return { created: matchRows.length, totalAdvancing };
+  return {
+    created: planned.length,
+    totalAdvancing: seeds.length,
+    seeds: seeds.map((s, i) => ({ seed: i + 1, teamId: s.teamId, pouleId: s.pouleId })),
+  };
 };
 
 // ── Zelf aanmelden (publiek, via QR in het café) ──────────────────────────────

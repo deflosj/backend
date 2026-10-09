@@ -189,6 +189,7 @@ tournamentRouter.post("/", ...adminOnly, async (req: Request, res: Response, nex
       teamsPerPoule: req.body.teamsPerPoule ?? null,
       teamsAdvancingPerPoule: req.body.teamsAdvancingPerPoule ?? null,
       bestNthsAdvancing: req.body.bestNthsAdvancing ?? null,
+      trackCount: req.body.trackCount ?? undefined,
     }));
   } catch (e) {
     next(e);
@@ -211,6 +212,7 @@ const saveTournament = async (req: Request, res: Response, next: NextFunction): 
       teamsPerPoule: req.body.teamsPerPoule,
       teamsAdvancingPerPoule: req.body.teamsAdvancingPerPoule,
       bestNthsAdvancing: req.body.bestNthsAdvancing,
+      trackCount: req.body.trackCount === undefined ? undefined : Number.parseInt(req.body.trackCount, 10),
       status: req.body.status,
       teamEditDeadline: parseDeadline(req.body.teamEditDeadline),
     }));
@@ -561,13 +563,13 @@ tournamentRouter.post("/:id/generate-poules", ...adminOnly, validate({ params: t
 
 tournamentRouter.post("/:id/generate-matches", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { startTime, slotMinutes, firstTrack } = req.body;
+    const { startTime, slotMinutes, trackCount } = req.body;
     if (!startTime) { next(new HttpError(400, "startTime is required")); return; }
     if (!slotMinutes) { next(new HttpError(400, "slotMinutes is required")); return; }
     res.status(201).json(await generateGroupMatches(Number.parseInt(req.params.id, 10), {
       startTime: new Date(startTime),
       slotMinutes: Number.parseInt(slotMinutes, 10),
-      firstTrack: firstTrack ? Number.parseInt(firstTrack, 10) : undefined,
+      trackCount: trackCount ? Number.parseInt(trackCount, 10) : undefined,
     }));
   } catch (e) {
     next(e);
@@ -576,12 +578,16 @@ tournamentRouter.post("/:id/generate-matches", ...adminOnly, validate({ params: 
 
 tournamentRouter.post("/:id/generate-knockout", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { startTime, slotMinutes } = req.body;
+    const { startTime, slotMinutes, breakMinutes, trackCount, withConsolation, force } = req.body;
     if (!startTime) { next(new HttpError(400, "startTime is required")); return; }
     if (!slotMinutes) { next(new HttpError(400, "slotMinutes is required")); return; }
     res.status(201).json(await generateKnockout(Number.parseInt(req.params.id, 10), {
       startTime: new Date(startTime),
       slotMinutes: Number.parseInt(slotMinutes, 10),
+      breakMinutes: breakMinutes === undefined ? undefined : Number.parseInt(breakMinutes, 10),
+      trackCount: trackCount ? Number.parseInt(trackCount, 10) : undefined,
+      withConsolation: withConsolation === undefined ? undefined : Boolean(withConsolation),
+      force: force === true,
     }));
   } catch (e) {
     next(e);

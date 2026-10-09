@@ -3,11 +3,17 @@ import { createLogger } from "../utils/logger";
 import config from "../config";
 import { HttpError } from "../utils/httpError";
 
+/**
+ *  Middleware for logging requests, handling errors, and managing 404 responses. 
+ *   * Sanitizes sensitive query parameters (like token, email, and password) from logs.
+ *   * Logs unhandled errors and sends appropriate HTTP responses based on the error type and environment.
+ *   * Returns a 404 response for unmatched routes.
+ */
+
 const logger = createLogger(config.logLevel);
 
 const sensitiveQueryKeys = new Set(["token", "email", "password"]);
 
-// Sanitize query parameters by removing sensitive keys
 const sanitizeQuery = (query: Request["query"]): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(query).filter(([key]) => !sensitiveQueryKeys.has(key.toLowerCase()))

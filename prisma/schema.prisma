@@ -401,6 +401,9 @@ model Tournament {
   teamsPerPoule          Int?
   teamsAdvancingPerPoule Int?
   bestNthsAdvancing      Int?
+  /// Aantal petanquebanen op het terrein. De generators plannen nooit meer
+  /// wedstrijden tegelijk dan dit.
+  trackCount             Int              @default(6)
   status                 TournamentStatus @default(UPCOMING)
   rules                  String?
   rulesUpdatedAt         DateTime?
@@ -490,7 +493,8 @@ model Match {
   scheduledAt  DateTime?
   track        Int?
   phase        Phase    @default(GROUP_STAGE)
-  bracketPos   String?  @unique
+  /// Plek in de bracket (R32-1, R16-3, QF2, SF1, F1, CF1). Uniek per toernooi.
+  bracketPos   String?
   scoreA       Int?
   scoreB       Int?
   createdAt    DateTime @default(now())
@@ -507,6 +511,7 @@ model Match {
   @@index([teamAId])
   @@index([teamBId])
   @@index([winnerId])
+  @@unique([tournamentId, bracketPos])
 }
 
 model Tiebreaker {

@@ -33,6 +33,7 @@ const T = {
   teamsPerPoule: 4,
   teamsAdvancingPerPoule: 2,
   bestNthsAdvancing: 0,
+  trackCount: 6,
   createdAt: new Date("2025-01-01"),
   rules: null,
   rulesUpdatedAt: null,
@@ -55,6 +56,8 @@ const POULE = {
   name: "Poule A",
   description: null,
   phase: "GROUP_STAGE" as const,
+  createdAt: new Date("2025-01-01"),
+  updatedAt: new Date("2025-01-01"),
   teams: [],
 };
 
@@ -68,6 +71,7 @@ const TEAM = {
   logoUrl: null,
   isPresent: false,
   isPaid: true,
+  paymentMethod: "CASH",
   speler1: "Luca",
   speler2: "Tom",
   speler3: "Wout",

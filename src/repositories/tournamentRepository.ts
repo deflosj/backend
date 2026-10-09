@@ -10,6 +10,7 @@ export interface TournamentData {
   teamsPerPoule?: number | null;
   teamsAdvancingPerPoule?: number | null;
   bestNthsAdvancing?: number | null;
+  trackCount?: number;
   status?: TournamentStatus;
   teamEditDeadline?: Date | null;
 }
@@ -294,7 +295,7 @@ function applyMatchToStats(map: Map<number, TeamStats>, teamId: number, myScore:
   s.goalsFor += myScore;
   s.goalsAgainst += oppScore;
   s.saldo += myScore - oppScore;
-  if (myScore > oppScore) { s.won++; s.points += 3; }
+  if (myScore > oppScore) { s.won++; s.points += 2; } // reglement: winst 2, gelijk 1
   else if (myScore === oppScore) { s.drawn++; s.points += 1; }
   else { s.lost++; }
 }
@@ -335,6 +336,11 @@ export const findTeamsByPoule = async (pouleId: number): Promise<TeamStanding[]>
   const statsMap = computeTeamStats(teams.map((t) => t.id), matches);
   return sortStandings(teams.map((t) => ({ ...t, ...(statsMap.get(t.id) ?? zeroStats()) })));
 };
+
+export const countUnscoredGroupMatches = (tournamentId: number): Promise<number> =>
+  prisma.match.count({
+    where: { tournamentId, phase: "GROUP_STAGE", OR: [{ scoreA: null }, { scoreB: null }] },
+  });
 
 export const deleteKnockoutMatches = (tournamentId: number) =>
   prisma.match.deleteMany({
