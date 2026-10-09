@@ -17,6 +17,9 @@ if (process.env.VERCEL) {
   // If the migration previously failed it will be re-applied with the fixed SQL.
   // This is a no-op once the migration has been successfully applied.
   tryRun('npm exec -- prisma migrate resolve --rolled-back "20260528122243_new"');
+  // Faalde op productie omdat trackCount daar al met de hand was toegevoegd;
+  // de SQL is nu idempotent. Geen effect zodra de migratie gelukt is.
+  tryRun('npm exec -- prisma migrate resolve --rolled-back "20261009090000_track_count_bracketpos_per_tournament"');
   run("npm exec -- prisma migrate deploy");
   run("npm run build:ts");
 } else {

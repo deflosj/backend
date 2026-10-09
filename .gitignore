@@ -49,3 +49,6 @@ tmp/
 
 # seed
 prisma/seed.ts
+
+# Lokale exports met persoonsgegevens
+data/
