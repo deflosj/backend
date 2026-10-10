@@ -6,6 +6,7 @@ import { optionalAuth, requireAuth } from "../middleware/auth";
 import { requireAccess } from "../middleware/authorizeRole";
 import { ROLE_MANAGER } from "../config/roleManager";
 import { validate } from "../utils/validate";
+import { mailTeams } from "../services/teamMail.service";
 import {
   addMatch,
   addPoule,
@@ -155,6 +156,7 @@ const savePortal = async (req: Request, res: Response, next: NextFunction): Prom
       speler2: req.body.speler2,
       speler3: req.body.speler3,
       speler4: req.body.speler4,
+      motto: req.body.motto,
     }));
   } catch (e) {
     next(e);
@@ -213,6 +215,11 @@ const saveTournament = async (req: Request, res: Response, next: NextFunction): 
       teamsAdvancingPerPoule: req.body.teamsAdvancingPerPoule,
       bestNthsAdvancing: req.body.bestNthsAdvancing,
       trackCount: req.body.trackCount === undefined ? undefined : Number.parseInt(req.body.trackCount, 10),
+      knockoutPauseMinutes: req.body.knockoutPauseMinutes,
+      knockoutSlotMinutes: req.body.knockoutSlotMinutes === "" ? null : req.body.knockoutSlotMinutes,
+      finalsSlotMinutes: req.body.finalsSlotMinutes,
+      roundBreakMinutes: req.body.roundBreakMinutes,
+      withConsolation: req.body.withConsolation === undefined ? undefined : Boolean(req.body.withConsolation),
       status: req.body.status,
       teamEditDeadline: parseDeadline(req.body.teamEditDeadline),
     }));
@@ -349,6 +356,7 @@ tournamentRouter.post("/:id/teams", ...adminOnly, validate({ params: tournamentI
         speler2: req.body.speler2 ?? "",
         speler3: req.body.speler3 ?? "",
         speler4: req.body.speler4 ?? "",
+        motto: req.body.motto ?? null,
       })
     );
   } catch (e) {
@@ -374,6 +382,7 @@ const saveTeam = async (req: Request, res: Response, next: NextFunction): Promis
         speler2: req.body.speler2,
         speler3: req.body.speler3,
         speler4: req.body.speler4,
+        motto: req.body.motto,
       })
     );
   } catch (e) {
@@ -576,15 +585,36 @@ tournamentRouter.post("/:id/generate-matches", ...adminOnly, validate({ params: 
   }
 });
 
+// ── Mail naar de kapiteinen ──────────────────────────────────────────────────
+
+tournamentRouter.post("/:id/mail", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const teamIds = Array.isArray(req.body?.teamIds)
+      ? (req.body.teamIds as unknown[]).map((x) => Number(x)).filter((x) => Number.isInteger(x))
+      : undefined;
+    res.json(await mailTeams(Number.parseInt(req.params.id, 10), {
+      subject: req.body?.subject,
+      body: req.body?.body,
+      audience: req.body?.audience,
+      pouleId: req.body?.pouleId ? Number(req.body.pouleId) : null,
+      teamIds,
+      send: req.body?.send === true,
+    }));
+  } catch (e) {
+    next(e);
+  }
+});
+
 tournamentRouter.post("/:id/generate-knockout", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { startTime, slotMinutes, breakMinutes, trackCount, withConsolation, force } = req.body;
+    const { startTime, slotMinutes, breakMinutes, finalsSlotMinutes, trackCount, withConsolation, force } = req.body;
     if (!startTime) { next(new HttpError(400, "startTime is required")); return; }
     if (!slotMinutes) { next(new HttpError(400, "slotMinutes is required")); return; }
     res.status(201).json(await generateKnockout(Number.parseInt(req.params.id, 10), {
       startTime: new Date(startTime),
       slotMinutes: Number.parseInt(slotMinutes, 10),
       breakMinutes: breakMinutes === undefined ? undefined : Number.parseInt(breakMinutes, 10),
+      finalsSlotMinutes: finalsSlotMinutes ? Number.parseInt(finalsSlotMinutes, 10) : undefined,
       trackCount: trackCount ? Number.parseInt(trackCount, 10) : undefined,
       withConsolation: withConsolation === undefined ? undefined : Boolean(withConsolation),
       force: force === true,

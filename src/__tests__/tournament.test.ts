@@ -34,6 +34,11 @@ const T = {
   teamsAdvancingPerPoule: 2,
   bestNthsAdvancing: 0,
   trackCount: 6,
+  knockoutPauseMinutes: 15,
+  knockoutSlotMinutes: null,
+  finalsSlotMinutes: 30,
+  roundBreakMinutes: 0,
+  withConsolation: true,
   createdAt: new Date("2025-01-01"),
   rules: null,
   rulesUpdatedAt: null,
@@ -76,6 +81,10 @@ const TEAM = {
   speler2: "Tom",
   speler3: "Wout",
   speler4: "Jens",
+  motto: null,
+  email: null,
+  phone: null,
+  token: "token-1",
   createdAt: new Date("2025-01-01"),
   updatedAt: new Date("2025-01-01"),
   played: 0,
@@ -101,6 +110,8 @@ const MATCH = {
   bracketPos: null,
   scoreA: null,
   scoreB: null,
+  createdAt: new Date("2025-01-01"),
+  updatedAt: new Date("2025-01-01"),
 };
 
 const TIEBREAKER = {
@@ -108,9 +119,11 @@ const TIEBREAKER = {
   tournamentId: 1,
   winnerId: null,
   teams: [],
+  createdAt: new Date("2025-01-01"),
+  updatedAt: new Date("2025-01-01"),
 };
 
-const TIEBREAK_TEAM = { id: 1, tiebreakId: 1, teamId: 1, score: null };
+const TIEBREAK_TEAM = { id: 1, tiebreakerId: 1, teamId: 1, score: null, createdAt: new Date("2025-01-01"), updatedAt: new Date("2025-01-01") };
 
 describe("Tournament Routes", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -387,6 +400,7 @@ describe("Tournament Routes", () => {
           speler2: "Tom",
           speler3: "Wout",
           speler4: "Jens",
+          motto: null,
         });
       expect(res.status).toBe(201);
       expect(res.body.name).toBe("De Vlaamse Arend");
@@ -636,7 +650,7 @@ describe("Tournament Routes", () => {
 
   describe("Match generation", () => {
     it("POST /:id/generate-matches generates group matches as admin", async () => {
-      svc.generateGroupMatches.mockResolvedValue({ created: 12 });
+      svc.generateGroupMatches.mockResolvedValue({ created: 12, tracksUsed: 6, lastSlotAt: null });
       const res = await request(app)
         .post("/tournaments/1/generate-matches")
         .set("Authorization", `Bearer ${adminToken}`)
@@ -681,7 +695,7 @@ describe("Tournament Routes", () => {
     });
 
     it("POST /:id/generate-knockout generates knockout matches as admin", async () => {
-      svc.generateKnockout.mockResolvedValue({ created: 4, totalAdvancing: 4 });
+      svc.generateKnockout.mockResolvedValue({ created: 4, totalAdvancing: 4, seeds: [] });
       const res = await request(app)
         .post("/tournaments/1/generate-knockout")
         .set("Authorization", `Bearer ${adminToken}`)

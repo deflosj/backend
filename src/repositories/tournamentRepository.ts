@@ -11,6 +11,11 @@ export interface TournamentData {
   teamsAdvancingPerPoule?: number | null;
   bestNthsAdvancing?: number | null;
   trackCount?: number;
+  knockoutPauseMinutes?: number;
+  knockoutSlotMinutes?: number | null;
+  finalsSlotMinutes?: number;
+  roundBreakMinutes?: number;
+  withConsolation?: boolean;
   status?: TournamentStatus;
   teamEditDeadline?: Date | null;
 }
@@ -97,6 +102,7 @@ export interface TeamData {
   speler2?: string;
   speler3?: string;
   speler4?: string;
+  motto?: string | null;
 }
 
 /** Portaalsleutel. Los van de invitecodes: die zijn kort en eenmalig, deze
@@ -130,6 +136,7 @@ export const createTeam = (tournamentId: number, data: TeamData): Promise<Team> 
       speler2: data.speler2 ?? "",
       speler3: data.speler3 ?? "",
       speler4: data.speler4 ?? "",
+      motto: data.motto ?? null,
       token: generateTeamToken(),
     },
   });

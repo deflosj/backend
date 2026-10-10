@@ -404,6 +404,16 @@ model Tournament {
   /// Aantal petanquebanen op het terrein. De generators plannen nooit meer
   /// wedstrijden tegelijk dan dit.
   trackCount             Int              @default(6)
+  /// Knock-out wordt automatisch opgemaakt na de laatste poulematch.
+  /// Pauze tussen de laatste poulematch en de eerste knock-outmatch.
+  knockoutPauseMinutes   Int              @default(15)
+  /// Matchduur in de 1/16 en 1/8 finales. Leeg = zelfde als in de poules.
+  knockoutSlotMinutes    Int?
+  /// Matchduur vanaf de kwartfinales.
+  finalsSlotMinutes      Int              @default(30)
+  /// Extra pauze tussen twee knock-outrondes.
+  roundBreakMinutes      Int              @default(0)
+  withConsolation        Boolean          @default(true)
   status                 TournamentStatus @default(UPCOMING)
   rules                  String?
   rulesUpdatedAt         DateTime?
@@ -461,6 +471,8 @@ model Team {
   speler2      String  @default("")
   speler3      String  @default("")
   speler4      String  @default("")
+  /// Motto van de ploeg: één regel op de teamkaart, door de kapitein zelf ingevuld.
+  motto        String?
   /// Sleutel van het teamportaal. Nooit publiek teruggeven.
   token        String  @unique
   createdAt    DateTime @default(now())

@@ -12,7 +12,7 @@ import {
   updateTeam,
   updateTeamLogo,
 } from "../repositories/tournamentRepository";
-import { getTeamRow, serializeTeam } from "./tournament.service";
+import { MAX_MOTTO, getTeamRow, serializeTeam } from "./tournament.service";
 
 /** Logo's komen al verkleind uit de browser (256px webp). Deze grens is de
  *  vangnetcontrole, niet de bedoeling. */
@@ -26,6 +26,7 @@ export interface TeamPortalInput {
   speler2?: string;
   speler3?: string;
   speler4?: string;
+  motto?: string | null;
 }
 
 const teamMatches = (matches: Match[], teamId: number): Match[] =>
@@ -101,7 +102,7 @@ export const updateTeamPortal = async (token: string, input: TeamPortalInput) =>
   const { team, tournament } = await loadPortal(token);
   requireOpen(tournament.teamEditDeadline);
 
-  const patch: Record<string, string> = {};
+  const patch: Record<string, string | null> = {};
 
   if (input.name !== undefined) {
     const name = input.name.trim();
@@ -121,6 +122,12 @@ export const updateTeamPortal = async (token: string, input: TeamPortalInput) =>
     const trimmed = value.trim();
     if (trimmed.length > MAX_PLAYER_NAME) throw new HttpError(400, `Een spelersnaam mag hoogstens ${MAX_PLAYER_NAME} tekens lang zijn.`);
     patch[key] = trimmed;
+  }
+
+  if (input.motto !== undefined) {
+    const motto = (input.motto ?? "").trim();
+    if (motto.length > MAX_MOTTO) throw new HttpError(400, `Een motto mag hoogstens ${MAX_MOTTO} tekens lang zijn.`);
+    patch.motto = motto || null;
   }
 
   const updated = Object.keys(patch).length > 0 ? await updateTeam(team.id, patch) : team;

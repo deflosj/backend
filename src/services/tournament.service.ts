@@ -48,6 +48,7 @@ import {
 } from "../repositories/tournamentRepository";
 import {
   buildKnockout,
+  groupSlotMinutes,
   MAX_KNOCKOUT_TEAMS,
   nextBracketSlot,
   rankQualifiers,
@@ -139,9 +140,20 @@ export const addTournament = (data: TournamentData) => {
   });
 };
 
+const KO_SETTINGS = ["knockoutPauseMinutes", "knockoutSlotMinutes", "finalsSlotMinutes", "roundBreakMinutes", "withConsolation"] as const;
+
 export const editTournament = async (id: number, data: Partial<TournamentData>) => {
   await getTournament(id);
-  await updateTournament(id, data);
+  const clean: Partial<TournamentData> = { ...data };
+  if (clean.knockoutPauseMinutes !== undefined) clean.knockoutPauseMinutes = parsePositiveInt(clean.knockoutPauseMinutes, "knockoutPauseMinutes", 0, 240);
+  if (clean.knockoutSlotMinutes !== undefined && clean.knockoutSlotMinutes !== null) clean.knockoutSlotMinutes = parsePositiveInt(clean.knockoutSlotMinutes, "knockoutSlotMinutes", 5, 180);
+  if (clean.finalsSlotMinutes !== undefined) clean.finalsSlotMinutes = parsePositiveInt(clean.finalsSlotMinutes, "finalsSlotMinutes", 5, 180);
+  if (clean.roundBreakMinutes !== undefined) clean.roundBreakMinutes = parsePositiveInt(clean.roundBreakMinutes, "roundBreakMinutes", 0, 240);
+  await updateTournament(id, clean);
+  // Andere doorgang of andere uren? Dan het (nog niet gestarte) schema opnieuw opmaken.
+  const affectsKo = KO_SETTINGS.some((k) => clean[k] !== undefined) ||
+    clean.teamsAdvancingPerPoule !== undefined || clean.bestNthsAdvancing !== undefined || clean.trackCount !== undefined;
+  if (affectsKo) await syncKnockout(id);
   return getTournamentView(id, true);
 };
 
@@ -215,11 +227,17 @@ export const getTeam = async (id: number, includeSecrets = false) => {
   return serializeTeam(team, statsMap.get(team.id) ?? ZERO_STATS, includeSecrets);
 };
 
+export const MAX_MOTTO = 60;
+
 const trimTeamInput = (data: Partial<TeamData>): Partial<TeamData> => {
   const out: Partial<TeamData> = { ...data };
   for (const key of ["name", "captainName", "speler1", "speler2", "speler3", "speler4"] as const) {
     const value = out[key];
     if (typeof value === "string") out[key] = value.trim();
+  }
+  if (typeof out.motto === "string") {
+    out.motto = out.motto.trim() || null;
+    if (out.motto && out.motto.length > MAX_MOTTO) throw new HttpError(400, `Een motto mag hoogstens ${MAX_MOTTO} tekens lang zijn.`);
   }
   if (typeof out.email === "string") out.email = out.email.trim() || null;
   if (typeof out.phone === "string") out.phone = out.phone.trim() || null;
@@ -331,7 +349,62 @@ export const recordScore = async (matchId: number, scoreA: number, scoreB: numbe
   }
   const scored = await scoreMatch(matchId, scoreA, scoreB);
   await propagateKnockout(scored);
+  if (scored.phase === Phase.GROUP_STAGE) await syncKnockout(scored.tournamentId);
   return scored;
+};
+
+// ── Automatisch knock-outschema ──────────────────────────────────────────────
+
+/** Wanneer en hoe de knock-out gespeeld wordt, uit de instellingen van het
+ *  toernooi en het poule-schema. null = nog geen poulewedstrijden. */
+export const knockoutPlan = (
+  tournament: {
+    knockoutPauseMinutes: number;
+    knockoutSlotMinutes: number | null;
+    finalsSlotMinutes: number;
+    roundBreakMinutes: number;
+    withConsolation: boolean;
+  },
+  groupMatches: Match[]
+) => {
+  const planned = groupMatches.filter((m) => m.scheduledAt);
+  if (planned.length === 0) return null;
+  const slot = groupSlotMinutes(planned);
+  const last = Math.max(...planned.map((m) => m.scheduledAt!.getTime()));
+  return {
+    startTime: new Date(last + (slot + tournament.knockoutPauseMinutes) * 60_000),
+    slotMinutes: tournament.knockoutSlotMinutes ?? slot,
+    finalsSlotMinutes: tournament.finalsSlotMinutes,
+    breakMinutes: tournament.roundBreakMinutes,
+    withConsolation: tournament.withConsolation,
+  };
+};
+
+/**
+ * Houdt het knock-outschema in lijn met de poules, zonder dat iemand op
+ * "genereren" moet drukken:
+ *  - zodra de laatste poulematch een score heeft, wordt het schema opgemaakt;
+ *  - wordt daarna nog een poulescore aangepast, dan wordt het opnieuw geloot;
+ *  - eens er een knock-outmatch gespeeld is, blijft alles staan.
+ * Tot dan toont de site een voorlopige bracket op basis van de standen.
+ */
+export const syncKnockout = async (tournamentId: number) => {
+  const tournament = await getTournament(tournamentId);
+  const all = await findMatchesByTournament(tournamentId);
+  const group = all.filter((m) => m.phase === Phase.GROUP_STAGE);
+  const ko = all.filter((m) => m.bracketPos);
+  if (group.length === 0) return { status: "no-groups" as const };
+  if (ko.some((m) => m.scoreA !== null || m.scoreB !== null)) return { status: "started" as const };
+
+  const open = group.filter((m) => m.scoreA === null || m.scoreB === null).length;
+  if (open > 0) {
+    if (ko.length) await deleteKnockoutMatches(tournamentId);
+    return { status: "waiting" as const, open };
+  }
+  const plan = knockoutPlan(tournament, group);
+  if (!plan) return { status: "no-groups" as const };
+  const res = await generateKnockout(tournamentId, { ...plan, force: true });
+  return { status: "generated" as const, created: res.created };
 };
 
 // ── Tiebreaker ────────────────────────────────────────────────────────────────
@@ -469,6 +542,8 @@ export const generateKnockout = async (
     startTime: Date;
     slotMinutes: number;
     breakMinutes?: number;
+    /** Slotduur vanaf de kwartfinales; leeg = slotMinutes. */
+    finalsSlotMinutes?: number;
     trackCount?: number;
     withConsolation?: boolean;
     force?: boolean;
@@ -478,6 +553,7 @@ export const generateKnockout = async (
   if (Number.isNaN(params.startTime.getTime())) throw new HttpError(400, "startTime is invalid");
   const slotMinutes = parsePositiveInt(params.slotMinutes, "slotMinutes", 5, 180);
   const breakMinutes = parsePositiveInt(params.breakMinutes ?? 0, "breakMinutes", 0, 240);
+  const finalsSlotMinutes = parsePositiveInt(params.finalsSlotMinutes ?? slotMinutes, "finalsSlotMinutes", 5, 180);
   const trackCount = parsePositiveInt(params.trackCount ?? tournament.trackCount, "trackCount", 1, 40);
 
   const poules = await findPoulesWithTeams(tournamentId);
@@ -515,6 +591,7 @@ export const generateKnockout = async (
     startTime: params.startTime,
     slotMinutes,
     breakMinutes,
+    finalsSlotMinutes,
     trackCount,
     withConsolation: params.withConsolation ?? true,
   });

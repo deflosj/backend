@@ -275,9 +275,14 @@ export interface KnockoutScheduleParams {
   slotMinutes: number;
   /** Extra pauze tussen twee rondes (bv. om scores te verwerken). */
   breakMinutes: number;
+  /** Slotduur vanaf de kwartfinales (die duren langer). Leeg = slotMinutes. */
+  finalsSlotMinutes?: number;
   trackCount: number;
   withConsolation: boolean;
 }
+
+/** Rondes die de langere "finales"-slot krijgen. */
+const LATE_PHASES = new Set<Phase>([Phase.QUARTER_FINAL, Phase.SEMI_FINAL, Phase.CONSOLATION_FINAL, Phase.FINAL]);
 
 /** Volledige bracket: eerste ronde ingevuld, latere rondes leeg (TBD).
  *  Vrijlotingen zetten het team meteen in de volgende ronde. Elke ronde
@@ -325,19 +330,36 @@ export function buildKnockout(seeds: StandingInput[], params: KnockoutSchedulePa
   let roundStart = startTime;
   for (const round of rounds) {
     const playable = round.filter((m) => !m.skip);
+    const slot = round.some((m) => LATE_PHASES.has(m.phase)) ? params.finalsSlotMinutes ?? slotMinutes : slotMinutes;
     playable.forEach((m, i) => {
       planned.push({
         pouleId: null,
         teamAId: m.a,
         teamBId: m.b,
-        scheduledAt: addMinutes(roundStart, Math.floor(i / trackCount) * slotMinutes),
+        scheduledAt: addMinutes(roundStart, Math.floor(i / trackCount) * slot),
         track: (i % trackCount) + 1,
         phase: m.phase,
         bracketPos: m.pos,
       });
     });
     const slots = Math.max(1, Math.ceil(playable.length / trackCount));
-    roundStart = addMinutes(roundStart, slots * slotMinutes + breakMinutes);
+    roundStart = addMinutes(roundStart, slots * slot + breakMinutes);
   }
   return planned;
+}
+
+/** Kleinste tijd tussen twee wedstrijden op dezelfde baan = de slotduur.
+ *  Zonder bruikbare data: 20 minuten. */
+export function groupSlotMinutes(matches: { track: number | null; scheduledAt: Date | null }[]): number {
+  const byTrack = new Map<number, number[]>();
+  for (const m of matches) {
+    if (m.track === null || !m.scheduledAt) continue;
+    byTrack.set(m.track, [...(byTrack.get(m.track) ?? []), m.scheduledAt.getTime()]);
+  }
+  let best = Infinity;
+  for (const times of byTrack.values()) {
+    const sorted = [...new Set(times)].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) best = Math.min(best, sorted[i] - sorted[i - 1]);
+  }
+  return Number.isFinite(best) && best > 0 ? Math.round(best / 60_000) : 20;
 }

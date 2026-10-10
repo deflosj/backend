@@ -12,6 +12,7 @@ import {
   resolveTiebreakerWinner,
   generateGroupMatches,
   generateKnockout,
+  syncKnockout,
   applyDelay,
 } from "../services/tournament.service";
 import {
@@ -37,6 +38,7 @@ import {
   createTeam,
   updateMatch,
   countUnscoredGroupMatches,
+  findMatchesByTournament,
   TeamStanding,
 } from "../repositories/tournamentRepository";
 
@@ -110,6 +112,7 @@ const repo = {
   createTeam: createTeam as jest.Mock,
   updateMatch: updateMatch as jest.Mock,
   countUnscoredGroupMatches: countUnscoredGroupMatches as jest.Mock,
+  findMatchesByTournament: findMatchesByTournament as jest.Mock,
 };
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -124,6 +127,11 @@ const fakeTournament = {
   teamsAdvancingPerPoule: 2,
   bestNthsAdvancing: 0,
   trackCount: 6,
+  knockoutPauseMinutes: 15,
+  knockoutSlotMinutes: null,
+  finalsSlotMinutes: 30,
+  roundBreakMinutes: 0,
+  withConsolation: true,
   createdAt: new Date("2025-01-01"),
   rules: null,
   rulesUpdatedAt: null,
@@ -177,6 +185,7 @@ const makeTeam = (id: number, overrides: Partial<Team> = {}): Team => ({
   speler2: "Tom",
   speler3: "Wout",
   speler4: "Jens",
+  motto: null,
   token: `token-${id}`,
   createdAt: new Date("2025-01-01"),
   updatedAt: new Date("2025-01-01"),
@@ -326,6 +335,7 @@ describe("addTeam", () => {
     speler2: "Tom",
     speler3: "Wout",
     speler4: "Jens",
+    motto: null,
   };
 
   it("throws 404 when tournament not found", async () => {
@@ -726,6 +736,58 @@ describe("generateKnockout", () => {
     const cf = ms.find((m) => m.bracketPos === "CF1")!;
     expect(f.scheduledAt).toEqual(cf.scheduledAt);
     expect(f.track).not.toBe(cf.track);
+  });
+
+  it("uses the longer finals slot from the quarter-finals on (like 2025: 20 → 30 min)", async () => {
+    twelvePoules();
+    await generateKnockout(1, { startTime, slotMinutes: 20, finalsSlotMinutes: 30 });
+    const ms = created();
+    const first = (phase: string) => ms.filter((m) => m.phase === phase).map((m) => m.scheduledAt.getTime()).sort((a, b) => a - b)[0];
+    const min = (phase: string) => (first(phase) - startTime.getTime()) / 60_000;
+    // 1/16: 3 slots van 20 → 1/8 na 60 min; 1/8: 2 slots van 20 → KF na 100 min
+    expect(min("ROUND_OF_16")).toBe(60);
+    expect(min("QUARTER_FINAL")).toBe(100);
+    // Vanaf de kwartfinales 30 min per ronde
+    expect(min("SEMI_FINAL")).toBe(130);
+    expect(min("FINAL")).toBe(160);
+    expect(first("CONSOLATION_FINAL")).toBe(first("FINAL"));
+  });
+
+  describe("syncKnockout (automatisch schema)", () => {
+    const g = (id: number, track: number, at: string, scored = true) => ({
+      id, tournamentId: 1, phase: "GROUP_STAGE", pouleId: 1, teamAId: 1, teamBId: 2, winnerId: null, bracketPos: null,
+      track, scheduledAt: new Date(at), scoreA: scored ? 3 : null, scoreB: scored ? 1 : null,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    const ko = (id: number, scored = false) => ({ ...g(id, 1, "2025-10-31T21:40:00", scored), phase: "ROUND_OF_32", bracketPos: `R32-${id}` });
+
+    it("makes the schedule once all group matches are scored: last slot + pause", async () => {
+      twelvePoules();
+      repo.findMatchesByTournament.mockResolvedValue([g(1, 1, "2025-10-31T20:20:00"), g(2, 1, "2025-10-31T20:40:00")] as never);
+      const res = await syncKnockout(1);
+      expect(res.status).toBe("generated");
+      // laatste poulematch 20:40 + 20 min slot + 15 min pauze = 21:15
+      const first = Math.min(...created().map((m) => m.scheduledAt.getTime()));
+      expect(new Date(first)).toEqual(new Date("2025-10-31T21:15:00"));
+    });
+
+    it("waits (and clears an outdated schedule) while group matches are open", async () => {
+      repo.findTournamentById.mockResolvedValue(fakeTournament);
+      repo.findMatchesByTournament.mockResolvedValue([g(1, 1, "2025-10-31T20:20:00"), g(2, 1, "2025-10-31T20:40:00", false), ko(1)] as never);
+      const res = await syncKnockout(1);
+      expect(res).toEqual({ status: "waiting", open: 1 });
+      expect(repo.deleteKnockoutMatches).toHaveBeenCalledWith(1);
+      expect(repo.bulkCreateMatches).not.toHaveBeenCalled();
+    });
+
+    it("never touches a knockout that already started", async () => {
+      repo.findTournamentById.mockResolvedValue(fakeTournament);
+      repo.findMatchesByTournament.mockResolvedValue([g(1, 1, "2025-10-31T20:20:00"), ko(1, true)] as never);
+      const res = await syncKnockout(1);
+      expect(res.status).toBe("started");
+      expect(repo.deleteKnockoutMatches).not.toHaveBeenCalled();
+      expect(repo.bulkCreateMatches).not.toHaveBeenCalled();
+    });
   });
 
   it("byes: 6 teams → top 2 seeds go straight to the semi-finals", async () => {
