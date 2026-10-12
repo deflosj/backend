@@ -83,7 +83,10 @@ export const createApp = (): Express => {
   app.use(`${config.apiPrefix}/auth/login`, authLimiter);
   app.use(`${config.apiPrefix}/auth/register`, authLimiter);
   app.use(`${config.apiPrefix}/auth/validate-invite`, authLimiter);
-  app.use(`${config.apiPrefix}/contact`, contactLimiter);
+  // Enkel het publieke contactformulier afremmen. Met app.use() telde elke
+  // GET /contact/messages van de admin ook mee, waardoor het beheer na
+  // twintig klikken een 429 kreeg.
+  app.post(`${config.apiPrefix}/contact/messages`, contactLimiter);
 
   // Routes
   app.use(`${config.apiPrefix}`, healthRouter);
