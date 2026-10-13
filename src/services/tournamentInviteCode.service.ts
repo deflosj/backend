@@ -63,7 +63,6 @@ export interface RedeemCodeInput {
   speler2?: string;
   speler3?: string;
   speler4?: string;
-  logoUrl?: string | null;
 }
 
 export const redeemTournamentCode = async (
@@ -82,7 +81,6 @@ export const redeemTournamentCode = async (
   // Create the team with the redeeming user as captain
   const team = await createTeam(tournamentId, {
     name: input.teamName.trim(),
-    logoUrl: input.logoUrl ?? null,
     pouleId: null,
     captainId: userId,
     speler1: input.speler1?.trim() ?? "",

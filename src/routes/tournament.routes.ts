@@ -46,7 +46,6 @@ import {
 } from "../services/tournament.service";
 import {
   getTeamPortal,
-  saveTeamPortalLogo,
   sendPortalLink,
   updateTeamPortal,
 } from "../services/teamPortal.service";
@@ -166,14 +165,6 @@ const savePortal = async (req: Request, res: Response, next: NextFunction): Prom
 tournamentRouter.patch("/teams/portal/:token", validate({ params: portalTokenParamsSchema }), savePortal);
 tournamentRouter.put("/teams/portal/:token", validate({ params: portalTokenParamsSchema }), savePortal);
 
-tournamentRouter.post("/teams/portal/:token/logo", validate({ params: portalTokenParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const { logoUrl, portal } = await saveTeamPortalLogo(req.params.token, req.body.dataUrl);
-    res.json({ logoUrl, ...portal });
-  } catch (e) {
-    next(e);
-  }
-});
 
 tournamentRouter.get("/:id", optionalAuth, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -343,7 +334,6 @@ tournamentRouter.post("/:id/teams", ...adminOnly, validate({ params: tournamentI
     res.status(201).json(
       await addTeam(Number.parseInt(req.params.id, 10), {
         name: req.body.name,
-        logoUrl: req.body.logoUrl ?? null,
         pouleId: req.body.pouleId ?? null,
         captainId: req.body.captainId ?? null,
         captainName: req.body.captainName ?? null,
@@ -369,7 +359,6 @@ const saveTeam = async (req: Request, res: Response, next: NextFunction): Promis
     res.json(
       await editTeam(Number.parseInt(req.params.teamId, 10), {
         name: req.body.name,
-        logoUrl: req.body.logoUrl,
         pouleId: req.body.pouleId,
         captainId: req.body.captainId,
         captainName: req.body.captainName,
@@ -683,7 +672,6 @@ tournamentRouter.post("/:id/redeem", requireAuth, validate({ params: tournamentI
           speler2: req.body.speler2 ?? "",
           speler3: req.body.speler3 ?? "",
           speler4: req.body.speler4 ?? "",
-          logoUrl: req.body.logoUrl ?? null,
         }
       )
     );
@@ -715,7 +703,6 @@ tournamentRouter.put("/:id/my-team", requireAuth, validate({ params: tournamentI
     res.json(
       await editTeam(myTeam.id, {
         name: req.body.name,
-        logoUrl: req.body.logoUrl,
         speler1: req.body.speler1,
         speler2: req.body.speler2,
         speler3: req.body.speler3,

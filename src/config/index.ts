@@ -14,6 +14,12 @@ interface Config {
   corsOrigin: string[];
   /** Waar de publieke site draait — basis voor links in mails. */
   publicSiteUrl: string;
+  /**
+   * Aantal proxies voor de backend (Express "trust proxy"). Achter Railway of
+   * een andere load balancer: 1. Zonder dit ziet de rate limiter elke bezoeker
+   * als het IP van de proxy. false = niet achter een proxy.
+   */
+  trustProxy: number | false;
   smtp: {
     host: string;
     port: number;
@@ -57,6 +63,8 @@ const getConfig = (): Config => {
   const accessTokenExpiry = "15m";
   const refreshTokenExpiry = "30d";
   const logLevel = process.env.LOG_LEVEL || "info";
+  const trustProxyHops = Number.parseInt(process.env.TRUST_PROXY || "", 10);
+  const trustProxy = Number.isInteger(trustProxyHops) && trustProxyHops > 0 ? trustProxyHops : false;
   const corsOrigin = (process.env.CORS_ORIGIN || "http://localhost:3000").split(",");
   const publicSiteUrl = (process.env.PUBLIC_SITE_URL || corsOrigin[0]).replace(/\/$/, "");
 
@@ -71,6 +79,7 @@ const getConfig = (): Config => {
     logLevel,
     corsOrigin,
     publicSiteUrl,
+    trustProxy,
     smtp: {
       host: process.env.SMTP_HOST || "",
       port: Number.parseInt(process.env.SMTP_PORT || "587", 10),

@@ -646,7 +646,6 @@ export const selfRegisterTeam = async (data: SelfRegisterData): Promise<{ token:
   const p = (v?: string) => String(v ?? "").trim().slice(0, 80);
   const team = await createTeam(t.id, {
     name,
-    logoUrl: null,
     pouleId: null,
     captainId: null,
     captainName,

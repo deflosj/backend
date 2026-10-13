@@ -1,7 +1,8 @@
-import express, { Express } from "express";
+import express, { Express, Request } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
 import config from "./config";
 import { createLogger } from "./utils/logger";
 import { requestLogger, errorHandler, notFoundHandler } from "./middleware/errorHandler";
@@ -19,11 +20,34 @@ import rolesRouter from "./routes/roles.routes";
 
 const logger = createLogger(config.logLevel);
 
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const STAFF_ROLES = new Set(["ADMIN", "SUPERADMIN", "REFEREE"]);
+
+/** Geldig JWT van iemand die op de toernooidag scores of teams beheert. */
+const isStaffRequest = (req: Request): boolean => {
+  const [scheme, token] = (req.headers.authorization ?? "").split(" ");
+  if (scheme !== "Bearer" || !token) return false;
+  try {
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ["HS256"] }) as { role?: string };
+    return typeof payload.role === "string" && STAFF_ROLES.has(payload.role);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Remt schrijfacties van anonieme bezoekers af. Lezen telt niet mee: de
+ * publieke toernooipagina's en het tv-scherm verversen elke halve minuut en
+ * komen via de Next-server allemaal van hetzelfde IP binnen. Ingelogde
+ * beheerders en scheidsrechters tellen ook niet mee — op de toernooidag zitten
+ * die samen op de wifi van de zaal.
+ */
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => READ_METHODS.has(req.method) || isStaffRequest(req),
 });
 
 const authLimiter = rateLimit({
@@ -42,6 +66,10 @@ const contactLimiter = rateLimit({
 
 export const createApp = (): Express => {
   const app = express();
+
+  // Achter een proxy (Railway): het echte bezoekers-IP uit X-Forwarded-For
+  // halen, anders delen alle bezoekers één rate-limitteller.
+  if (config.trustProxy) app.set("trust proxy", config.trustProxy);
 
   // Security middleware — explicit CSP for a pure API (no browser resources served)
   app.use(
@@ -64,15 +92,8 @@ export const createApp = (): Express => {
     })
   );
 
-  // Body parsing middleware. Teamlogo's komen als data-URI binnen en zijn
-  // groter dan een gewone JSON-body; enkel die ene route krijgt meer ruimte.
-  const standardJson = express.json({ limit: "100kb" });
-  const logoJson = express.json({ limit: "700kb" });
-  app.use((req, res, next) =>
-    req.path.includes("/teams/portal/") && req.path.endsWith("/logo")
-      ? logoJson(req, res, next)
-      : standardJson(req, res, next)
-  );
+  // Body parsing middleware
+  app.use(express.json({ limit: "100kb" }));
   app.use(express.urlencoded({ limit: "100kb", extended: true }));
 
   // Request logging middleware
