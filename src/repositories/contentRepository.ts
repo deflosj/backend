@@ -176,7 +176,7 @@ export const createSponsor = async (data: SponsorData): Promise<Sponsor> => {
       name: data.name,
       logoUrl: data.logoUrl ?? null,
       websiteUrl: data.websiteUrl ?? null,
-      tier: data.tier ?? "STANDARD",
+      tier: data.tier ?? "T200",
       isActive: data.isActive ?? true,
       sortOrder: data.sortOrder ?? 0,
     },

@@ -17,6 +17,7 @@ import helpersPortalRouter from "./routes/helpersPortal.routes";
 import shiftsRouter from "./routes/shifts.routes";
 import inviteCodesRouter from "./routes/inviteCodes.routes";
 import rolesRouter from "./routes/roles.routes";
+import helpersRouter from "./routes/helpers.routes";
 
 const logger = createLogger(config.logLevel);
 
@@ -121,6 +122,7 @@ export const createApp = (): Express => {
   app.use(`${config.apiPrefix}/events`, shiftsRouter);
   app.use(`${config.apiPrefix}/invite-codes`, inviteCodesRouter);
   app.use(`${config.apiPrefix}/roles`, rolesRouter);
+  app.use(`${config.apiPrefix}/helpers`, helpersRouter);
 
   // 404 handler
   app.use(notFoundHandler);

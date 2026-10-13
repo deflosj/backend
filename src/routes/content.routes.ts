@@ -50,7 +50,7 @@ interface SponsorBody {
   name?: string;
   logoUrl?: string | null;
   websiteUrl?: string | null;
-  tier?: "MAIN" | "GOLD" | "STANDARD";
+  tier?: "T450_PLUS" | "T450" | "T200";
   isActive?: boolean;
   sortOrder?: number;
 }

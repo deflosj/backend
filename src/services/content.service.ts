@@ -162,7 +162,7 @@ export const createNewSponsor = async (input: SponsorInput) => {
     name,
     logoUrl: input.logoUrl ?? null,
     websiteUrl: input.websiteUrl ?? null,
-    tier: input.tier ?? SponsorTier.STANDARD,
+    tier: input.tier ?? SponsorTier.T200,
     isActive: input.isActive ?? true,
     sortOrder: input.sortOrder ?? 0,
   });
