@@ -290,8 +290,9 @@ describe("errorHandler middleware", () => {
   });
 
   it("hides error details in production", () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    const mutableConfig = config as { nodeEnv: string };
+    const originalEnv = mutableConfig.nodeEnv;
+    mutableConfig.nodeEnv = "production";
 
     const error = new Error("Database connection failed");
     errorHandler(error, req as Request, res as Response, next);
@@ -302,7 +303,7 @@ describe("errorHandler middleware", () => {
       })
     );
 
-    process.env.NODE_ENV = originalEnv;
+    mutableConfig.nodeEnv = originalEnv;
   });
 
   it("shows error details in non-production for HttpError", () => {

@@ -1,8 +1,8 @@
-import { createApp } from "../app";
+import { createTestApp } from "./setup/testApp";
 import request from "supertest";
 
 describe("Health Routes", () => {
-  const app = createApp();
+  const app = createTestApp();
 
   it("should return health status at GET /health", async () => {
     const response = await request(app).get("/health");

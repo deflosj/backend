@@ -13,8 +13,6 @@ import membersRouter from "./routes/members.routes";
 import contactRouter from "./routes/contact.routes";
 import tournamentRouter from "./routes/tournament.routes";
 import registrationsRouter from "./routes/registrations.routes";
-import helpersPortalRouter from "./routes/helpersPortal.routes";
-import shiftsRouter from "./routes/shifts.routes";
 import inviteCodesRouter from "./routes/inviteCodes.routes";
 import rolesRouter from "./routes/roles.routes";
 import helpersRouter from "./routes/helpers.routes";
@@ -118,8 +116,6 @@ export const createApp = (): Express => {
   app.use(`${config.apiPrefix}/contact`, contactRouter);
   app.use(`${config.apiPrefix}/tournaments`, tournamentRouter);
   app.use(`${config.apiPrefix}/registrations`, registrationsRouter);
-  app.use(`${config.apiPrefix}/events`, helpersPortalRouter);
-  app.use(`${config.apiPrefix}/events`, shiftsRouter);
   app.use(`${config.apiPrefix}/invite-codes`, inviteCodesRouter);
   app.use(`${config.apiPrefix}/roles`, rolesRouter);
   app.use(`${config.apiPrefix}/helpers`, helpersRouter);

@@ -1,7 +1,7 @@
 import request from "supertest";
 import argon2 from "argon2";
 import jwt from "jsonwebtoken";
-import { createApp } from "../app";
+import { createTestApp } from "./setup/testApp";
 import config from "../config";
 import {
   createUser,
@@ -65,7 +65,7 @@ const getCookieValue = (response: { headers: Record<string, unknown> }, cookieNa
 const hashPassword = (password: string) => argon2.hash(password, { type: argon2.argon2id });
 
 describe("Auth Routes", () => {
-  const app = createApp();
+  const app = createTestApp();
 
   beforeEach(() => {
     jest.clearAllMocks();

@@ -1,10 +1,10 @@
 import jwt from "jsonwebtoken";
 import request from "supertest";
-import { createApp } from "../app";
+import { createTestApp } from "./setup/testApp";
 import config from "../config";
 
 describe("Roles Routes", () => {
-  const app = createApp();
+  const app = createTestApp();
 
   it("returns the centralized role matrix for admins", async () => {
     const token = jwt.sign(

@@ -1,7 +1,7 @@
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import { TournamentStatus } from "@prisma/client";
-import { createApp } from "../app";
+import { createTestApp } from "./setup/testApp";
 import config from "../config";
 import { HttpError } from "../utils/httpError";
 import * as tournamentService from "../services/tournament.service";
@@ -9,7 +9,7 @@ import * as tournamentService from "../services/tournament.service";
 jest.mock("../services/tournament.service");
 
 const svc = tournamentService as jest.Mocked<typeof tournamentService>;
-const app = createApp();
+const app = createTestApp();
 
 const adminToken = jwt.sign(
   { email: "admin@example.com", username: "admin", role: "ADMIN" },
@@ -469,11 +469,16 @@ describe("Tournament Routes", () => {
       expect(res.body).toHaveLength(1);
     });
 
-    it("GET /:id/matches?phase=GROUP filters by phase", async () => {
+    it("GET /:id/matches?phase=GROUP_STAGE filters by phase", async () => {
       svc.listMatches.mockResolvedValue([MATCH]);
-      const res = await request(app).get("/tournaments/1/matches?phase=GROUP");
+      const res = await request(app).get("/tournaments/1/matches?phase=GROUP_STAGE");
       expect(res.status).toBe(200);
-      expect(svc.listMatches).toHaveBeenCalledWith(1, { phase: "GROUP", pouleId: undefined });
+      expect(svc.listMatches).toHaveBeenCalledWith(1, { phase: "GROUP_STAGE", pouleId: undefined });
+    });
+
+    it("GET /:id/matches?phase=… weigert een onbekende fase", async () => {
+      const res = await request(app).get("/tournaments/1/matches?phase=GROUP");
+      expect(res.status).toBe(400);
     });
 
     it("GET /:id/matches?pouleId=1 filters by poule", async () => {
@@ -506,6 +511,7 @@ describe("Tournament Routes", () => {
     });
 
     it("PUT /:id/matches/:matchId updates a match as admin", async () => {
+      svc.getMatch.mockResolvedValue(MATCH);
       svc.editMatch.mockResolvedValue({ ...MATCH, track: 2 });
       const res = await request(app)
         .put("/tournaments/1/matches/1")
