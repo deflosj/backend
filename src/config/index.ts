@@ -20,6 +20,21 @@ interface Config {
    * als het IP van de proxy. false = niet achter een proxy.
    */
   trustProxy: number | false;
+  /**
+   * Mailprovider: "gmail" | "resend" | "smtp". Leeg = automatisch de eerste
+   * die ingevuld is, in die volgorde. Railway blokkeert SMTP-poorten.
+   */
+  mailProvider: string;
+  /** Gemeenschappelijke From-header, bv. `De Flosj <info@deflosj.be>`. */
+  mailFrom: string;
+  /** Gmail API via service account met domain-wide delegation (Workspace). */
+  gmail: {
+    serviceAccountJson: string;
+    sender: string;
+  };
+  resend: {
+    apiKey: string;
+  };
   smtp: {
     host: string;
     port: number;
@@ -83,6 +98,15 @@ const getConfig = (): Config => {
     corsOrigin,
     publicSiteUrl,
     trustProxy,
+    mailProvider: (process.env.MAIL_PROVIDER || "").toLowerCase(),
+    mailFrom: process.env.MAIL_FROM || process.env.SMTP_FROM || "",
+    gmail: {
+      serviceAccountJson: process.env.GMAIL_SERVICE_ACCOUNT_JSON || "",
+      sender: process.env.GMAIL_SENDER || "",
+    },
+    resend: {
+      apiKey: process.env.RESEND_API_KEY || "",
+    },
     smtp: {
       host: process.env.SMTP_HOST || "",
       port: Number.parseInt(process.env.SMTP_PORT || "587", 10),

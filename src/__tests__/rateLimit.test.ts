@@ -1,10 +1,10 @@
 import request from "supertest";
 import jwt from "jsonwebtoken";
-import { createApp } from "../app";
+import { createTestApp } from "./setup/testApp";
 import config from "../config";
 
 describe("Globale rate limit", () => {
-  const app = createApp();
+  const app = createTestApp();
 
   it("telt leesverzoeken niet mee", async () => {
     for (let i = 0; i < 210; i++) {

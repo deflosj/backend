@@ -1,12 +1,12 @@
 import request from "supertest";
 import jwt from "jsonwebtoken";
-import { createApp } from "../app";
+import { createTestApp } from "./setup/testApp";
 import config from "../config";
 import * as contentService from "../services/content.service";
 import * as memberService from "../services/member.service";
 import * as contactService from "../services/contact.service";
 
-jest.mock("../services/contentService", () => ({
+jest.mock("../services/content.service", () => ({
   __esModule: true,
   listNewsPosts: jest.fn(),
   getNewsPost: jest.fn(),
@@ -20,14 +20,14 @@ jest.mock("../services/contentService", () => ({
   editSponsor: jest.fn(),
 }));
 
-jest.mock("../services/memberService", () => ({
+jest.mock("../services/member.service", () => ({
   __esModule: true,
   listMembers: jest.fn(),
   getMember: jest.fn(),
   saveMyProfile: jest.fn(),
 }));
 
-jest.mock("../services/contactService", () => ({
+jest.mock("../services/contact.service", () => ({
   __esModule: true,
   submitContactMessage: jest.fn(),
   listMessages: jest.fn(),
@@ -40,7 +40,7 @@ const memberMock = memberService as jest.Mocked<typeof memberService>;
 const contactMock = contactService as jest.Mocked<typeof contactService>;
 
 describe("Site feature routes", () => {
-  const app = createApp();
+  const app = createTestApp();
   const adminToken = jwt.sign(
     {
       email: "admin@example.com",
@@ -114,24 +114,18 @@ describe("Site feature routes", () => {
     memberMock.listMembers.mockResolvedValue([
       {
         id: 1,
-        userId: 1,
         firstName: "Alex",
         lastName: "Janssen",
-        phone: null,
         bio: null,
         joinedAt: null,
-        isPublic: true,
       },
     ]);
     memberMock.getMember.mockResolvedValue({
       id: 1,
-      userId: 1,
       firstName: "Alex",
       lastName: "Janssen",
-      phone: null,
       bio: null,
       joinedAt: null,
-      isPublic: true,
     });
 
     const listResponse = await request(app).get("/members");
@@ -150,6 +144,7 @@ describe("Site feature routes", () => {
       body: "Question",
       status: "UNREAD",
       createdAt: new Date(),
+      updatedAt: new Date(),
       readAt: null,
     });
     contactMock.listMessages.mockResolvedValue([]);
@@ -161,6 +156,7 @@ describe("Site feature routes", () => {
       body: "Question",
       status: "READ",
       createdAt: new Date(),
+      updatedAt: new Date(),
       readAt: new Date(),
     });
 
