@@ -64,9 +64,12 @@ enum RSVPStatus {
 // --- News & Sponsors ---
 
 enum SponsorTier {
-  MAIN
-  GOLD
-  STANDARD
+  /// €450+
+  T450_PLUS
+  /// €450
+  T450
+  /// €200
+  T200
 }
 
 // --- Tournament ---
@@ -236,8 +239,23 @@ model Event {
   inviteToken InviteToken[]
   attendance  Attendance[]
   shiftGroups ShiftGroup[]
+  helpers     Helper[]
 
   @@index([createdById])
+}
+
+/// Vrijwilliger die bij één of meer events geholpen heeft. Bewust simpel:
+/// geen shifts of taken, enkel wie bij welk event hielp.
+model Helper {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String?
+  phone     String?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events Event[]
 }
 
 /// A named group of shift slots within an event (e.g. "Security", "Bar").
@@ -381,7 +399,7 @@ model Sponsor {
   name       String
   logoUrl    String?
   websiteUrl String?
-  tier       SponsorTier @default(STANDARD)
+  tier       SponsorTier @default(T200)
   isActive   Boolean     @default(true)
   sortOrder  Int         @default(0)
   createdAt  DateTime    @default(now())

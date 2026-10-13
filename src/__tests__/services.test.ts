@@ -394,7 +394,7 @@ describe("contentService", () => {
           name: "Sponsor 1",
           logoUrl: null,
           websiteUrl: null,
-          tier: "STANDARD",
+          tier: "T200",
           isActive: true,
           sortOrder: 0,
           createdAt: new Date(),
@@ -419,13 +419,13 @@ describe("contentService", () => {
       });
     });
 
-    it("createNewSponsor defaults tier to STANDARD", async () => {
+    it("createNewSponsor defaults tier to T200", async () => {
       contentRepositoryMock.createSponsor.mockResolvedValue({
         id: 1,
         name: "Sponsor",
         logoUrl: null,
         websiteUrl: null,
-        tier: "STANDARD",
+        tier: "T200",
         isActive: true,
         sortOrder: 0,
         createdAt: new Date(),
@@ -438,7 +438,7 @@ describe("contentService", () => {
 
       expect(contentRepositoryMock.createSponsor).toHaveBeenCalledWith(
         expect.objectContaining({
-          tier: "STANDARD",
+          tier: "T200",
         })
       );
     });
