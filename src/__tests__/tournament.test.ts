@@ -73,7 +73,6 @@ const TEAM = {
   captainName: "Luca",
   pouleId: 1,
   name: "De Vlaamse Arend",
-  logoUrl: null,
   isPresent: false,
   isPaid: true,
   paymentMethod: "CASH",

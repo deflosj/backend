@@ -455,7 +455,6 @@ model Team {
   captainId    Int?
   pouleId      Int?
   name         String
-  logoUrl      String?
   isPresent    Boolean @default(false)
   /// Inschrijvingsgeld betaald aan de balie.
   isPaid       Boolean @default(false)

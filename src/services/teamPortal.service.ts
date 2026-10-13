@@ -10,13 +10,9 @@ import {
   findTeamsByTournament,
   findTournamentById,
   updateTeam,
-  updateTeamLogo,
 } from "../repositories/tournamentRepository";
 import { MAX_MOTTO, getTeamRow, serializeTeam } from "./tournament.service";
 
-/** Logo's komen al verkleind uit de browser (256px webp). Deze grens is de
- *  vangnetcontrole, niet de bedoeling. */
-const MAX_LOGO_BYTES = 300 * 1024;
 const MAX_TEAM_NAME = 60;
 const MAX_PLAYER_NAME = 60;
 
@@ -134,28 +130,6 @@ export const updateTeamPortal = async (token: string, input: TeamPortalInput) =>
   return buildPortalView(updated);
 };
 
-/** Het logo komt binnen als data-URI. Bewust geen bestandsopslag: op een
- *  serverless host overleeft de schijf de volgende deploy niet, en een
- *  externe bucket is kosten die dit niet waard is. */
-export const saveTeamPortalLogo = async (token: string, dataUrl: string) => {
-  const { team, tournament } = await loadPortal(token);
-  requireOpen(tournament.teamEditDeadline);
-
-  if (typeof dataUrl !== "string" || !/^data:image\/(png|jpeg|webp);base64,/.test(dataUrl)) {
-    throw new HttpError(400, "Stuur een afbeelding door (png, jpeg of webp).");
-  }
-
-  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
-  const bytes = Buffer.from(base64, "base64").byteLength;
-  if (bytes === 0) throw new HttpError(400, "Die afbeelding is leeg.");
-  if (bytes > MAX_LOGO_BYTES) {
-    throw new HttpError(413, `Het logo mag hoogstens ${Math.round(MAX_LOGO_BYTES / 1024)} kB groot zijn.`);
-  }
-
-  const updated = await updateTeamLogo(team.id, dataUrl);
-  return { logoUrl: updated.logoUrl, portal: await buildPortalView(updated) };
-};
-
 // ── Portaallink versturen ─────────────────────────────────────────────────────
 
 export const portalLinkFor = (token: string): string =>
@@ -181,7 +155,7 @@ export const sendPortalLink = async (teamId: number, email?: string) => {
     subject: `${team.name} — vul jullie ploeg aan`,
     text:
       `Dag ${team.captainName || team.name},\n\n` +
-      "Via onderstaande link vullen jullie de teamnaam, de vier spelers en een logo aan. " +
+      "Via onderstaande link vullen jullie de teamnaam en de vier spelers aan. " +
       "Geen account nodig — de link is de sleutel, dus je mag hem gerust in de ploeggroep delen.\n\n" +
       `${link}${deadline}\n\n` +
       "Tot op het toernooi!",

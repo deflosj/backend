@@ -89,7 +89,6 @@ export const deletePoule = (id: number): Promise<Poule> =>
 
 export interface TeamData {
   name: string;
-  logoUrl?: string | null;
   pouleId?: number | null;
   captainId?: number | null;
   captainName?: string | null;
@@ -123,7 +122,6 @@ export const createTeam = (tournamentId: number, data: TeamData): Promise<Team> 
     data: {
       tournamentId,
       name: data.name,
-      logoUrl: data.logoUrl,
       pouleId: data.pouleId,
       captainId: data.captainId,
       captainName: data.captainName,
@@ -149,9 +147,6 @@ export const deleteTeam = (id: number): Promise<Team> =>
 
 export const checkInTeam = (id: number, isPresent: boolean): Promise<Team> =>
   prisma.team.update({ where: { id }, data: { isPresent } });
-
-export const updateTeamLogo = (id: number, logoUrl: string): Promise<Team> =>
-  prisma.team.update({ where: { id }, data: { logoUrl } });
 
 // ── Matches ───────────────────────────────────────────────────────────────────
 
