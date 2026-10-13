@@ -65,7 +65,10 @@ const getConfig = (): Config => {
   const logLevel = process.env.LOG_LEVEL || "info";
   const trustProxyHops = Number.parseInt(process.env.TRUST_PROXY || "", 10);
   const trustProxy = Number.isInteger(trustProxyHops) && trustProxyHops > 0 ? trustProxyHops : false;
-  const corsOrigin = (process.env.CORS_ORIGIN || "http://localhost:3000").split(",");
+  const corsOrigin = (process.env.CORS_ORIGIN || "http://localhost:3000")
+    .split(",")
+    .map((o) => o.trim().replace(/\/$/, ""))
+    .filter(Boolean);
   const publicSiteUrl = (process.env.PUBLIC_SITE_URL || corsOrigin[0]).replace(/\/$/, "");
 
   return {
