@@ -21,7 +21,8 @@ import { fillFields, mailTeams } from "../services/teamMail.service";
 const r = repo as jest.Mocked<typeof repo>;
 const team = (id: number, o: Record<string, unknown> = {}) => ({
   id, name: `Ploeg ${id}`, captainName: `Kapitein ${id}`, email: `p${id}@x.be`, token: `tok${id}`,
-  pouleId: 1, isPaid: true, isPresent: false, ...o,
+  pouleId: 1, isPaid: true, isPresent: false,
+  speler1: "An", speler2: "Bo", speler3: "Cas", speler4: "Dina", ...o,
 });
 
 beforeEach(() => {
@@ -30,7 +31,7 @@ beforeEach(() => {
   r.findPoulesByTournament.mockResolvedValue([{ id: 1, name: "Poule A" }] as never);
   r.findTeamsByTournament.mockResolvedValue([
     team(1),
-    team(2, { isPaid: false }),
+    team(2, { speler3: "S3", speler4: "" }),
     team(3, { email: null }),
     team(4, { email: "kapot@x.be" }),
   ] as never);
@@ -55,9 +56,10 @@ describe("teamMail", () => {
     expect(res.preview?.text).toContain("https://deflosj.be/mijn-team/tok1");
   });
 
-  it("filters on unpaid", async () => {
-    const res = await mailTeams(1, { subject: "x", body: "y", audience: "unpaid" });
+  it("filters on incomplete teams, counting placeholders like K1/S3 as empty", async () => {
+    const res = await mailTeams(1, { subject: "x", body: "Nog {ontbrekend}", audience: "incomplete" });
     expect(res.recipients.map((x) => x.teamId)).toEqual([2]);
+    expect(res.preview?.text).toBe("Nog 2 spelers");
   });
 
   it("sends and reports failures per team", async () => {
@@ -68,5 +70,15 @@ describe("teamMail", () => {
 
   it("refuses to send without subject", async () => {
     await expect(mailTeams(1, { subject: "", body: "y", send: true })).rejects.toThrow("onderwerp");
+  });
+});
+
+describe("players", () => {
+  const { isPlaceholderPlayer } = jest.requireActual("../utils/players") as typeof import("../utils/players");
+  it.each(["", "  ", "K1", "k4", "S2", "s 3", "Speler 1", "speler-2", "?", "-", "nvt", "TBD"])("%p is a placeholder", (n) => {
+    expect(isPlaceholderPlayer(n)).toBe(true);
+  });
+  it.each(["Kobe", "Sam", "K. Jacobs", "Senne 2", "Xavier"])("%p is a real player", (n) => {
+    expect(isPlaceholderPlayer(n)).toBe(false);
   });
 });

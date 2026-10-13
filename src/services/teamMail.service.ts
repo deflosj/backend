@@ -8,16 +8,17 @@ import {
   findTournamentById,
 } from "../repositories/tournamentRepository";
 import { portalLinkFor } from "./teamPortal.service";
+import { isTeamComplete, playerCount } from "../utils/players";
 
 /**
  * Mail naar de kapiteinen van een toernooi, vanuit de admin.
  * Invulvelden tussen accolades worden per ploeg ingevuld.
  */
 
-export const MAIL_FIELDS = ["ploeg", "kapitein", "poule", "eerste_match", "portaallink"] as const;
+export const MAIL_FIELDS = ["ploeg", "kapitein", "poule", "eerste_match", "portaallink", "ontbrekend"] as const;
 export type MailField = (typeof MAIL_FIELDS)[number];
 
-export type MailAudience = "all" | "paid" | "unpaid" | "present" | "absent";
+export type MailAudience = "all" | "incomplete";
 
 export interface TeamMailInput {
   subject?: string;
@@ -44,6 +45,8 @@ const when = (d: Date) =>
     minute: "2-digit",
   });
 
+const missingText = (n: number) => (n <= 0 ? "geen spelers meer" : `${n} speler${n === 1 ? "" : "s"}`);
+
 const fieldsFor = (team: Team, poules: Poule[], matches: Match[], names: Map<number, string>): Record<MailField, string> => {
   const poule = poules.find((p) => p.id === team.pouleId);
   const first = matches
@@ -58,6 +61,7 @@ const fieldsFor = (team: Team, poules: Poule[], matches: Match[], names: Map<num
       ? `${when(first.scheduledAt!)}${first.track !== null ? ` op baan ${first.track}` : ""}${opp ? ` tegen ${opp}` : ""}`
       : "het schema volgt nog",
     portaallink: portalLinkFor(team.token),
+    ontbrekend: missingText(4 - playerCount(team)),
   };
 };
 
@@ -88,10 +92,7 @@ export const mailTeams = async (tournamentId: number, input: TeamMailInput) => {
   const chosen = teams.filter((t) => {
     if (input.teamIds?.length && !input.teamIds.includes(t.id)) return false;
     if (input.pouleId && t.pouleId !== input.pouleId) return false;
-    if (audience === "paid" && !t.isPaid) return false;
-    if (audience === "unpaid" && t.isPaid) return false;
-    if (audience === "present" && !t.isPresent) return false;
-    if (audience === "absent" && t.isPresent) return false;
+    if (audience === "incomplete" && isTeamComplete(t)) return false;
     return true;
   });
   const withMail = chosen.filter((t) => t.email && EMAIL.test(t.email.trim()));
