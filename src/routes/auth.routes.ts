@@ -22,9 +22,15 @@ const REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
 const CSRF_COOKIE_NAME = "csrfToken";
 const AUTH_COOKIE_PATH = `${config.apiPrefix}/auth`;
 const AUTH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+/**
+ * "lax" volstaat zolang frontend en backend op hetzelfde domein draaien
+ * (deflosj.be + api.deflosj.be). Staat de backend op een ander domein
+ * (bv. *.up.railway.app), zet dan COOKIE_SAMESITE=none.
+ */
+const COOKIE_SAME_SITE: "lax" | "none" = process.env.COOKIE_SAMESITE?.toLowerCase() === "none" ? "none" : "lax";
 const cookieOptions = {
   secure: true,
-  sameSite: "lax" as const,
+  sameSite: COOKIE_SAME_SITE,
   path: AUTH_COOKIE_PATH,
 };
 const refreshCookieOptions = {
@@ -62,7 +68,12 @@ const validateInviteParamsSchema = z.object({
   code: z.string().min(1, { message: "Invite code is verplicht" }),
 });
 
-type AuthResponse = Pick<AuthResult, "user" | "accessToken">;
+/**
+ * csrfToken zit ook in de body: de csrf-cookie staat op het backend-domein en
+ * is dus onleesbaar voor de frontend (ander host). De frontend bewaart hem zelf
+ * en stuurt hem terug als x-csrf-token header (double submit).
+ */
+type AuthResponse = Pick<AuthResult, "user" | "accessToken"> & { csrfToken: string };
 
 const parseCookies = (cookieHeader: string | undefined): Record<string, string> =>
   (cookieHeader || "")
@@ -97,11 +108,12 @@ const requireCsrfToken = (req: Request): void => {
   }
 };
 
-const issueAuthCookies = (res: Response, refreshToken: string): void => {
+const issueAuthCookies = (res: Response, refreshToken: string): string => {
   const csrfToken = crypto.randomBytes(32).toString("hex");
 
   res.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, refreshCookieOptions);
   res.cookie(CSRF_COOKIE_NAME, csrfToken, csrfCookieOptions);
+  return csrfToken;
 };
 
 const clearAuthCookies = (res: Response): void => {
@@ -109,9 +121,10 @@ const clearAuthCookies = (res: Response): void => {
   res.clearCookie(CSRF_COOKIE_NAME, cookieOptions);
 };
 
-const toAuthResponse = ({ user, accessToken }: AuthResult): AuthResponse => ({
+const toAuthResponse = ({ user, accessToken }: AuthResult, csrfToken: string): AuthResponse => ({
   user,
   accessToken,
+  csrfToken,
 });
 
 authRouter.post(
@@ -127,8 +140,8 @@ authRouter.post(
       }
 
       const authResult = await registerUser({ email, username, password, inviteCode });
-      issueAuthCookies(res, authResult.refreshToken);
-      res.status(201).json(toAuthResponse(authResult));
+      const csrfToken = issueAuthCookies(res, authResult.refreshToken);
+      res.status(201).json(toAuthResponse(authResult, csrfToken));
     } catch (error) {
       next(error);
     }
@@ -142,8 +155,8 @@ authRouter.post(
     try {
       const { identifier, password } = req.body as z.infer<typeof loginSchema>;
       const authResult = await loginUser({ identifier, password });
-      issueAuthCookies(res, authResult.refreshToken);
-      res.json(toAuthResponse(authResult));
+      const csrfToken = issueAuthCookies(res, authResult.refreshToken);
+      res.json(toAuthResponse(authResult, csrfToken));
     } catch (error) {
       next(error);
     }
@@ -163,8 +176,8 @@ authRouter.post(
       }
 
       const authResult = await refreshTokens(refreshToken);
-      issueAuthCookies(res, authResult.refreshToken);
-      res.json(toAuthResponse(authResult));
+      const csrfToken = issueAuthCookies(res, authResult.refreshToken);
+      res.json(toAuthResponse(authResult, csrfToken));
     } catch (error) {
       next(error);
     }
