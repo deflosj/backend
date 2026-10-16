@@ -29,6 +29,11 @@ export interface TeamMailInput {
   teamIds?: number[];
   /** false = enkel tonen wie het krijgt en hoe het eruitziet. */
   send?: boolean;
+  /**
+   * Testmail: stuur enkel de eerste mail (ingevuld voor de eerste ploeg) naar
+   * dit adres, met "[TEST]" in het onderwerp. Geen enkele ploeg krijgt iets.
+   */
+  testTo?: string | null;
 }
 
 const MAX_SUBJECT = 150;
@@ -114,6 +119,21 @@ export const mailTeams = async (tournamentId: number, input: TeamMailInput) => {
 
   if (!input.send) return { recipients, skipped, preview, sent: 0, failed: [] as { name: string; email: string; error: string }[] };
   if (mails.length === 0) throw new HttpError(400, "Geen enkele gekozen ploeg heeft een e-mailadres.");
+
+  const testTo = input.testTo?.trim();
+  if (testTo) {
+    if (!EMAIL.test(testTo)) throw new HttpError(400, "Ongeldig testadres.");
+    const sample = mails[0];
+    const result = await sendMailBatch([{ to: testTo, subject: `[TEST] ${sample.subject}`, text: sample.text }]);
+    return {
+      recipients,
+      skipped,
+      preview,
+      sent: result.sent.length,
+      failed: result.failed.map((f) => ({ name: `Test (${sample.name})`, email: f.to, error: f.error })),
+      test: { to: testTo, basedOn: sample.name },
+    };
+  }
 
   const result = await sendMailBatch(mails);
   const failed = result.failed.map((f) => {

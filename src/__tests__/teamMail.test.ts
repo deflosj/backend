@@ -81,4 +81,18 @@ describe("players", () => {
   it.each(["Kobe", "Sam", "K. Jacobs", "Senne 2", "Xavier"])("%p is a real player", (n) => {
     expect(isPlaceholderPlayer(n)).toBe(false);
   });
+
+  it("stuurt een testmail enkel naar het testadres, niet naar de ploegen", async () => {
+    const res = await mailTeams(1, { subject: "Hallo {ploeg}", body: "Dag {kapitein}", send: true, testTo: "wannes@x.be" });
+    expect(sendMailBatch).toHaveBeenCalledTimes(1);
+    const sent = (sendMailBatch as jest.Mock).mock.calls[0][0] as { to: string; subject: string; text: string }[];
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ to: "wannes@x.be", subject: "[TEST] Hallo Ploeg 1", text: "Dag Kapitein 1" });
+    expect(res.sent).toBe(1);
+  });
+
+  it("weigert een ongeldig testadres", async () => {
+    await expect(mailTeams(1, { subject: "x", body: "y", send: true, testTo: "geen-mail" })).rejects.toMatchObject({ statusCode: 400 });
+    expect(sendMailBatch).not.toHaveBeenCalled();
+  });
 });

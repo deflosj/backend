@@ -588,6 +588,7 @@ tournamentRouter.post("/:id/mail", ...adminOnly, validate({ params: tournamentId
       pouleId: req.body?.pouleId ? Number(req.body.pouleId) : null,
       teamIds,
       send: req.body?.send === true,
+      testTo: typeof req.body?.testTo === "string" ? req.body.testTo : null,
     }));
   } catch (e) {
     next(e);
