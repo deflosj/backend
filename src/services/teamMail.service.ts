@@ -29,11 +29,6 @@ export interface TeamMailInput {
   teamIds?: number[];
   /** false = enkel tonen wie het krijgt en hoe het eruitziet. */
   send?: boolean;
-  /**
-   * Testmail: stuur enkel de eerste mail (ingevuld voor de eerste ploeg) naar
-   * dit adres, met "[TEST]" in het onderwerp. Geen enkele ploeg krijgt iets.
-   */
-  testTo?: string | null;
 }
 
 const MAX_SUBJECT = 150;
@@ -120,25 +115,37 @@ export const mailTeams = async (tournamentId: number, input: TeamMailInput) => {
   if (!input.send) return { recipients, skipped, preview, sent: 0, failed: [] as { name: string; email: string; error: string }[] };
   if (mails.length === 0) throw new HttpError(400, "Geen enkele gekozen ploeg heeft een e-mailadres.");
 
-  const testTo = input.testTo?.trim();
-  if (testTo) {
-    if (!EMAIL.test(testTo)) throw new HttpError(400, "Ongeldig testadres.");
-    const sample = mails[0];
-    const result = await sendMailBatch([{ to: testTo, subject: `[TEST] ${sample.subject}`, text: sample.text }]);
-    return {
-      recipients,
-      skipped,
-      preview,
-      sent: result.sent.length,
-      failed: result.failed.map((f) => ({ name: `Test (${sample.name})`, email: f.to, error: f.error })),
-      test: { to: testTo, basedOn: sample.name },
-    };
-  }
-
   const result = await sendMailBatch(mails);
   const failed = result.failed.map((f) => {
     const m = mails.find((x) => x.to === f.to);
     return { name: m?.name ?? f.to, email: f.to, error: f.error };
   });
   return { recipients, skipped, preview, sent: result.sent.length, failed };
+};
+
+/**
+ * Testmail: enkel de eerste mail (ingevuld voor de eerste ploeg) gaat naar
+ * `testTo`, met "[TEST]" in het onderwerp. Bewust een aparte functie en een
+ * apart endpoint: deze code kan geen enkele ploeg bereiken. Zonder geldig
+ * testadres wordt er niets verstuurd.
+ */
+export const mailTeamsTest = async (tournamentId: number, input: TeamMailInput, testTo: unknown) => {
+  const to = typeof testTo === "string" ? testTo.trim() : "";
+  if (!to || !EMAIL.test(to)) throw new HttpError(400, "Vul een geldig testadres in.");
+
+  // Enkel opbouwen (send: false) — nooit versturen via mailTeams.
+  const built = await mailTeams(tournamentId, { ...input, send: false });
+  if (!built.preview) throw new HttpError(400, "Geen enkele gekozen ploeg heeft een e-mailadres om als voorbeeld te gebruiken.");
+  const subject = String(input.subject ?? "").trim();
+  const body = String(input.body ?? "").trim();
+  if (!subject) throw new HttpError(400, "Een onderwerp is verplicht.");
+  if (!body) throw new HttpError(400, "Schrijf eerst een bericht.");
+
+  const result = await sendMailBatch([{ to, subject: `[TEST] ${built.preview.subject}`, text: built.preview.text }]);
+  return {
+    to,
+    basedOn: built.preview.name,
+    sent: result.sent.length,
+    error: result.failed[0]?.error ?? null,
+  };
 };

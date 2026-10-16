@@ -16,7 +16,7 @@ jest.mock("../services/teamPortal.service", () => ({
 
 import * as repo from "../repositories/tournamentRepository";
 import { sendMailBatch } from "../utils/mailer";
-import { fillFields, mailTeams } from "../services/teamMail.service";
+import { fillFields, mailTeams, mailTeamsTest } from "../services/teamMail.service";
 
 const r = repo as jest.Mocked<typeof repo>;
 const team = (id: number, o: Record<string, unknown> = {}) => ({
@@ -82,17 +82,25 @@ describe("players", () => {
     expect(isPlaceholderPlayer(n)).toBe(false);
   });
 
-  it("stuurt een testmail enkel naar het testadres, niet naar de ploegen", async () => {
-    const res = await mailTeams(1, { subject: "Hallo {ploeg}", body: "Dag {kapitein}", send: true, testTo: "wannes@x.be" });
+  it("testmail gaat enkel naar het testadres, nooit naar de ploegen", async () => {
+    const res = await mailTeamsTest(1, { subject: "Hallo {ploeg}", body: "Dag {kapitein}" }, "wannes@x.be");
     expect(sendMailBatch).toHaveBeenCalledTimes(1);
     const sent = (sendMailBatch as jest.Mock).mock.calls[0][0] as { to: string; subject: string; text: string }[];
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ to: "wannes@x.be", subject: "[TEST] Hallo Ploeg 1", text: "Dag Kapitein 1" });
-    expect(res.sent).toBe(1);
+    expect(sent).toEqual([{ to: "wannes@x.be", subject: "[TEST] Hallo Ploeg 1", text: "Dag Kapitein 1" }]);
+    expect(res).toMatchObject({ to: "wannes@x.be", basedOn: "Ploeg 1", sent: 1, error: null });
   });
 
-  it("weigert een ongeldig testadres", async () => {
-    await expect(mailTeams(1, { subject: "x", body: "y", send: true, testTo: "geen-mail" })).rejects.toMatchObject({ statusCode: 400 });
-    expect(sendMailBatch).not.toHaveBeenCalled();
+  it.each([["leeg", ""], ["spaties", "   "], ["geen adres", "geen-mail"], ["geen string", undefined], ["object", { to: "x@y.be" }]])(
+    "verstuurt niets bij een ongeldig testadres (%s)",
+    async (_label, testTo) => {
+      await expect(mailTeamsTest(1, { subject: "x", body: "y", send: true }, testTo)).rejects.toMatchObject({ statusCode: 400 });
+      expect(sendMailBatch).not.toHaveBeenCalled();
+    }
+  );
+
+  it("negeert send: true in een testaanvraag", async () => {
+    await mailTeamsTest(1, { subject: "x", body: "y", send: true }, "wannes@x.be");
+    const all = (sendMailBatch as jest.Mock).mock.calls.flatMap((c) => c[0] as { to: string }[]);
+    expect(all.map((m) => m.to)).toEqual(["wannes@x.be"]);
   });
 });

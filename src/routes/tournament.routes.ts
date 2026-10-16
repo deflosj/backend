@@ -6,7 +6,7 @@ import { optionalAuth, requireAuth } from "../middleware/auth";
 import { requireAccess } from "../middleware/authorizeRole";
 import { ROLE_MANAGER } from "../config/roleManager";
 import { validate } from "../utils/validate";
-import { mailTeams } from "../services/teamMail.service";
+import { mailTeams, mailTeamsTest } from "../services/teamMail.service";
 import {
   addMatch,
   addPoule,
@@ -588,8 +588,21 @@ tournamentRouter.post("/:id/mail", ...adminOnly, validate({ params: tournamentId
       pouleId: req.body?.pouleId ? Number(req.body.pouleId) : null,
       teamIds,
       send: req.body?.send === true,
-      testTo: typeof req.body?.testTo === "string" ? req.body.testTo : null,
     }));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Testmail naar één adres. Apart endpoint: dit kan nooit naar de ploegen gaan.
+tournamentRouter.post("/:id/mail/test", ...adminOnly, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await mailTeamsTest(Number.parseInt(req.params.id, 10), {
+      subject: req.body?.subject,
+      body: req.body?.body,
+      audience: req.body?.audience,
+      pouleId: req.body?.pouleId ? Number(req.body.pouleId) : null,
+    }, req.body?.testTo));
   } catch (e) {
     next(e);
   }
