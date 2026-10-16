@@ -16,6 +16,7 @@ import registrationsRouter from "./routes/registrations.routes";
 import inviteCodesRouter from "./routes/inviteCodes.routes";
 import rolesRouter from "./routes/roles.routes";
 import helpersRouter from "./routes/helpers.routes";
+import mailRouter from "./routes/mail.routes";
 
 const logger = createLogger(config.logLevel);
 
@@ -119,6 +120,7 @@ export const createApp = (): Express => {
   app.use(`${config.apiPrefix}/invite-codes`, inviteCodesRouter);
   app.use(`${config.apiPrefix}/roles`, rolesRouter);
   app.use(`${config.apiPrefix}/helpers`, helpersRouter);
+  app.use(`${config.apiPrefix}/mail`, mailRouter);
 
   // 404 handler
   app.use(notFoundHandler);

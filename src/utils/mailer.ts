@@ -184,6 +184,7 @@ export const sendMail = async (input: MailInput): Promise<void> => {
   else if (provider === "resend") await resendRequest("/emails", toResend(input));
   else if (provider === "smtp") await smtpSend(createSmtpTransport(), input);
   else throw notConfigured();
+  invalidateUsage();
   logger.info("Mail sent", { provider, to: input.to, subject: input.subject });
 };
 
@@ -196,6 +197,68 @@ export const sendMailBatch = async (inputs: MailInput[], concurrency = 3): Promi
   else if (provider === "resend") result = await resendBatch(inputs);
   else if (provider === "smtp") result = await smtpBatch(inputs, concurrency);
   else throw notConfigured();
+  invalidateUsage();
   logger.info("Mail batch sent", { provider, sent: result.sent.length, failed: result.failed.length });
   return result;
+};
+
+// ── Status (voor de admin) ───────────────────────────────────────────────────
+
+export interface QuotaWindow {
+  used: number;
+  limit: number | null;
+  resetsAt: string | null;
+}
+
+export interface MailStatus {
+  provider: Provider | null;
+  from: string;
+  /** Enkel bij Resend: verbruik volgens hun /usage-endpoint. */
+  usage: { daily: QuotaWindow | null; monthly: QuotaWindow | null } | null;
+  /** Waarom er geen verbruik is (bv. API-key zonder rechten op /usage). */
+  usageError?: string;
+}
+
+interface ResendUsageWindow { used?: number; limit?: number | null; resets_at?: string | null }
+
+const toWindow = (w?: ResendUsageWindow): QuotaWindow | null =>
+  w ? { used: w.used ?? 0, limit: w.limit ?? null, resetsAt: w.resets_at ?? null } : null;
+
+let usageCache: { at: number; value: MailStatus["usage"] } | null = null;
+
+const fetchResendUsage = async (): Promise<MailStatus["usage"]> => {
+  // Kort cachen: de pagina mag pollen zonder Resend te bestoken.
+  if (usageCache && Date.now() - usageCache.at < 30_000) return usageCache.value;
+  const res = await fetch(`${RESEND_URL}/usage`, {
+    headers: { Authorization: `Bearer ${config.resend.apiKey}` },
+  });
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(
+      res.status === 401 || res.status === 403
+        ? "De API-key mag het verbruik niet opvragen (geef hem 'Full access' in Resend)."
+        : `Resend ${res.status}: ${detail?.message ?? res.statusText}`
+    );
+  }
+  const body = (await res.json()) as { emails?: { daily?: ResendUsageWindow; monthly?: ResendUsageWindow } };
+  const value = { daily: toWindow(body.emails?.daily), monthly: toWindow(body.emails?.monthly) };
+  usageCache = { at: Date.now(), value };
+  return value;
+};
+
+/** Na een verzending moet de teller opnieuw opgehaald worden. */
+const invalidateUsage = () => { usageCache = null; };
+
+export const getMailStatus = async (): Promise<MailStatus> => {
+  const provider = pickProvider();
+  const from = provider === "smtp" ? config.smtp.from : config.mailFrom || config.gmail.sender;
+  const status: MailStatus = { provider, from, usage: null };
+  if (provider === "resend") {
+    try {
+      status.usage = await fetchResendUsage();
+    } catch (e) {
+      status.usageError = e instanceof Error ? e.message : String(e);
+    }
+  }
+  return status;
 };
