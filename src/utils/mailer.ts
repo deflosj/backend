@@ -5,12 +5,20 @@ import { sendViaGmail } from "./gmail";
 
 const logger = createLogger(config.logLevel);
 
+/** Bijlage als base64 (zonder `data:`-prefix). */
+export interface MailAttachment {
+  filename: string;
+  content: string;
+  contentType?: string;
+}
+
 export interface MailInput {
   to: string;
   subject: string;
   text: string;
   html?: string;
   replyTo?: string;
+  attachments?: MailAttachment[];
 }
 
 export interface BatchResult {
@@ -80,6 +88,9 @@ const toResend = (input: MailInput) => ({
   text: input.text,
   ...(input.html ? { html: input.html } : {}),
   ...(input.replyTo ? { reply_to: input.replyTo } : {}),
+  ...(input.attachments?.length
+    ? { attachments: input.attachments.map((a) => ({ filename: a.filename, content: a.content })) }
+    : {}),
 });
 
 const resendRequest = async (path: string, body: unknown): Promise<void> => {
@@ -99,8 +110,26 @@ const resendRequest = async (path: string, body: unknown): Promise<void> => {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Resend's batch-endpoint kent geen bijlagen: dan één voor één, onder de
+ *  limiet van ±2 calls per seconde. 48 ploegen ≈ 30 seconden. */
+const resendOneByOne = async (inputs: MailInput[]): Promise<BatchResult> => {
+  const result: BatchResult = { sent: [], failed: [] };
+  for (let i = 0; i < inputs.length; i++) {
+    const input = inputs[i];
+    try {
+      await resendRequest("/emails", toResend(input));
+      result.sent.push(input.to);
+    } catch (e) {
+      result.failed.push({ to: input.to, error: e instanceof Error ? e.message : String(e) });
+    }
+    if (i + 1 < inputs.length) await sleep(550);
+  }
+  return result;
+};
+
 /** Resend's batch-endpoint: max 100 mails per call, ±2 calls per seconde. */
 const resendBatch = async (inputs: MailInput[]): Promise<BatchResult> => {
+  if (inputs.some((m) => m.attachments?.length)) return resendOneByOne(inputs);
   const result: BatchResult = { sent: [], failed: [] };
   for (let i = 0; i < inputs.length; i += 100) {
     const chunk = inputs.slice(i, i + 100);
@@ -151,6 +180,12 @@ const smtpSend = (transport: Transport, input: MailInput) =>
     subject: input.subject,
     text: input.text,
     html: input.html,
+    attachments: input.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      encoding: "base64",
+      contentType: a.contentType,
+    })),
   });
 
 const smtpBatch = async (inputs: MailInput[], concurrency: number): Promise<BatchResult> => {

@@ -1,6 +1,6 @@
 import { Match, Poule, Team } from "@prisma/client";
 import { HttpError } from "../utils/httpError";
-import { MailInput, sendMailBatch } from "../utils/mailer";
+import { MailAttachment, MailInput, sendMailBatch } from "../utils/mailer";
 import {
   findMatchesByTournament,
   findPoulesByTournament,
@@ -29,11 +29,46 @@ export interface TeamMailInput {
   teamIds?: number[];
   /** false = enkel tonen wie het krijgt en hoe het eruitziet. */
   send?: boolean;
+  /** Bijlagen voor elke ploeg (bv. het reglement), base64. */
+  attachments?: unknown;
 }
 
 const MAX_SUBJECT = 150;
 const MAX_BODY = 10_000;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const MAX_ATTACHMENTS = 3;
+/** Na decoderen; Resend aanvaardt tot 40 MB, maar mailboxen niet altijd. */
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+};
+
+/** Controleert en normaliseert de bijlagen uit de request. */
+export const parseAttachments = (raw: unknown): MailAttachment[] => {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) throw new HttpError(400, "Bijlagen hebben een ongeldig formaat.");
+  if (raw.length > MAX_ATTACHMENTS) throw new HttpError(400, `Hoogstens ${MAX_ATTACHMENTS} bijlagen.`);
+  let total = 0;
+  return raw.map((item) => {
+    const a = (item ?? {}) as { filename?: unknown; content?: unknown };
+    const filename = String(a.filename ?? "")
+      .replace(/[\\/\r\n"]/g, "")
+      .trim()
+      .slice(0, 120);
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+    const contentType = ALLOWED_TYPES[ext];
+    if (!filename || !contentType) throw new HttpError(400, "Enkel PDF, PNG of JPG als bijlage.");
+    const content = String(a.content ?? "").replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+    if (!content || !/^[A-Za-z0-9+/]+={0,2}$/.test(content)) throw new HttpError(400, `Bijlage ${filename} is leeg of beschadigd.`);
+    total += Math.floor((content.length * 3) / 4);
+    if (total > MAX_ATTACHMENT_BYTES) throw new HttpError(400, "De bijlagen zijn samen groter dan 5 MB.");
+    return { filename, content, contentType };
+  });
+};
 
 const when = (d: Date) =>
   d.toLocaleString("nl-BE", {
@@ -80,6 +115,7 @@ export const mailTeams = async (tournamentId: number, input: TeamMailInput) => {
   }
   if (subject.length > MAX_SUBJECT) throw new HttpError(400, `Het onderwerp mag hoogstens ${MAX_SUBJECT} tekens zijn.`);
   if (body.length > MAX_BODY) throw new HttpError(400, "Het bericht is te lang.");
+  const attachments = parseAttachments(input.attachments);
 
   const [teams, poules, matches] = await Promise.all([
     findTeamsByTournament(tournamentId),
@@ -106,13 +142,15 @@ export const mailTeams = async (tournamentId: number, input: TeamMailInput) => {
       to: t.email!.trim(),
       subject: fillFields(subject, fields),
       text: fillFields(body, fields),
+      ...(attachments.length ? { attachments } : {}),
     };
   });
 
   const recipients = mails.map((m) => ({ teamId: m.teamId, name: m.name, email: m.to }));
   const preview = mails[0] ? { to: mails[0].to, name: mails[0].name, subject: mails[0].subject, text: mails[0].text } : null;
+  const attached = attachments.map((a) => ({ filename: a.filename, bytes: Math.floor((a.content.length * 3) / 4) }));
 
-  if (!input.send) return { recipients, skipped, preview, sent: 0, failed: [] as { name: string; email: string; error: string }[] };
+  if (!input.send) return { recipients, skipped, preview, attachments: attached, sent: 0, failed: [] as { name: string; email: string; error: string }[] };
   if (mails.length === 0) throw new HttpError(400, "Geen enkele gekozen ploeg heeft een e-mailadres.");
 
   const result = await sendMailBatch(mails);
@@ -120,7 +158,7 @@ export const mailTeams = async (tournamentId: number, input: TeamMailInput) => {
     const m = mails.find((x) => x.to === f.to);
     return { name: m?.name ?? f.to, email: f.to, error: f.error };
   });
-  return { recipients, skipped, preview, sent: result.sent.length, failed };
+  return { recipients, skipped, preview, attachments: attached, sent: result.sent.length, failed };
 };
 
 /**
@@ -141,7 +179,15 @@ export const mailTeamsTest = async (tournamentId: number, input: TeamMailInput, 
   if (!subject) throw new HttpError(400, "Een onderwerp is verplicht.");
   if (!body) throw new HttpError(400, "Schrijf eerst een bericht.");
 
-  const result = await sendMailBatch([{ to, subject: `[TEST] ${built.preview.subject}`, text: built.preview.text }]);
+  const attachments = parseAttachments(input.attachments);
+  const result = await sendMailBatch([
+    {
+      to,
+      subject: `[TEST] ${built.preview.subject}`,
+      text: built.preview.text,
+      ...(attachments.length ? { attachments } : {}),
+    },
+  ]);
   return {
     to,
     basedOn: built.preview.name,

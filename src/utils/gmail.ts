@@ -22,6 +22,7 @@ export interface GmailMessage {
   text: string;
   html?: string;
   replyTo?: string;
+  attachments?: { filename: string; content: string; contentType?: string }[];
 }
 
 interface ServiceAccountKey {
@@ -102,6 +103,17 @@ const bodyPart = (type: string, content: string) =>
     Buffer.from(content, "utf8").toString("base64").replace(/.{76}/g, "$&\r\n"),
   ].join("\r\n");
 
+const attachmentPart = (a: { filename: string; content: string; contentType?: string }) => {
+  const name = encodeHeader(a.filename.replace(/"/g, ""));
+  return [
+    `Content-Type: ${a.contentType || "application/octet-stream"}; name="${name}"`,
+    `Content-Disposition: attachment; filename="${name}"`,
+    "Content-Transfer-Encoding: base64",
+    "",
+    a.content.replace(/\s+/g, "").replace(/.{76}/g, "$&\r\n"),
+  ].join("\r\n");
+};
+
 const buildMime = (cfg: GmailConfig, msg: GmailMessage): string => {
   const headers = [
     `From: ${encodeAddress(cfg.from)}`,
@@ -110,18 +122,36 @@ const buildMime = (cfg: GmailConfig, msg: GmailMessage): string => {
     `Subject: ${encodeHeader(msg.subject)}`,
     "MIME-Version: 1.0",
   ];
-  if (!msg.html) return [...headers, bodyPart("text/plain", msg.text)].join("\r\n");
 
-  const boundary = `flosj_${randomBytes(12).toString("hex")}`;
+  // Het leesbare deel: platte tekst, of tekst + html als alternatief.
+  let body: string;
+  if (msg.html) {
+    const alt = `flosj_${randomBytes(12).toString("hex")}`;
+    body = [
+      `Content-Type: multipart/alternative; boundary="${alt}"`,
+      "",
+      `--${alt}`,
+      bodyPart("text/plain", msg.text),
+      `--${alt}`,
+      bodyPart("text/html", msg.html),
+      `--${alt}--`,
+      "",
+    ].join("\r\n");
+  } else {
+    body = bodyPart("text/plain", msg.text);
+  }
+
+  if (!msg.attachments?.length) return [...headers, body].join("\r\n");
+
+  const mixed = `flosj_${randomBytes(12).toString("hex")}`;
   return [
     ...headers,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    `Content-Type: multipart/mixed; boundary="${mixed}"`,
     "",
-    `--${boundary}`,
-    bodyPart("text/plain", msg.text),
-    `--${boundary}`,
-    bodyPart("text/html", msg.html),
-    `--${boundary}--`,
+    `--${mixed}`,
+    body,
+    ...msg.attachments.flatMap((a) => [`--${mixed}`, attachmentPart(a)]),
+    `--${mixed}--`,
     "",
   ].join("\r\n");
 };

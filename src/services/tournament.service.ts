@@ -45,6 +45,8 @@ import {
   upsertTiebreaker,
   updateTournamentRules,
   countUnscoredGroupMatches,
+  setMatchResult,
+  setTeamTiebreaks,
 } from "../repositories/tournamentRepository";
 import {
   buildKnockout,
@@ -54,13 +56,16 @@ import {
   rankQualifiers,
   scheduleGroupStage,
 } from "./tournamentScheduling";
+import { MAX_FORFEITS, PouleRankInfo, rankPoule } from "./standings";
 
 // ── Serialisatie ──────────────────────────────────────────────────────────────
 
 const ZERO_STATS: TeamStats = {
   played: 0, won: 0, drawn: 0, lost: 0,
-  goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0,
+  goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0, forfeits: 0,
 };
+
+const NO_RANK: PouleRankInfo = { pouleRank: 0, tieWith: [], tieResolved: false, eliminated: false };
 
 /** Een team zoals de frontend het verwacht: platte velden plus de berekende
  *  stand. `token` en `email` gaan er alleen uit voor wie het toernooi beheert —
@@ -68,14 +73,33 @@ const ZERO_STATS: TeamStats = {
 export const serializeTeam = (
   team: Team,
   stats: TeamStats = ZERO_STATS,
-  includeSecrets = false
+  includeSecrets = false,
+  rank: PouleRankInfo = NO_RANK
 ) => {
   const { token, email, phone, ...rest } = team;
   return {
     ...rest,
     ...stats,
+    ...rank,
     ...(includeSecrets ? { token, email, phone } : {}),
   };
+};
+
+/** Plaats in de poule volgens het reglement, voor alle teams van een toernooi. */
+const ranksForTeams = (teams: Team[], matches: Match[], statsMap: Map<number, TeamStats>) => {
+  const ranks = new Map<number, PouleRankInfo>();
+  const group = matches.filter((m) => m.phase === Phase.GROUP_STAGE);
+  const pouleIds = [...new Set(teams.map((t) => t.pouleId).filter((id): id is number => id !== null))];
+  for (const pouleId of pouleIds) {
+    const ranked = rankPoule(
+      teams.filter((t) => t.pouleId === pouleId).map((t) => ({ ...t, ...(statsMap.get(t.id) ?? ZERO_STATS) })),
+      group.filter((m) => m.pouleId === pouleId)
+    );
+    for (const r of ranked) {
+      ranks.set(r.id, { pouleRank: r.pouleRank, tieWith: r.tieWith, tieResolved: r.tieResolved, eliminated: r.eliminated });
+    }
+  }
+  return ranks;
 };
 
 /** Stand per team, berekend uit de poulewedstrijden van dit toernooi. */
@@ -90,9 +114,12 @@ const serializeTournament = <T extends { teams: Team[]; matches: Match[] }>(
   includeSecrets: boolean
 ) => {
   const statsMap = statsForTeams(tournament.teams, tournament.matches);
+  const ranks = ranksForTeams(tournament.teams, tournament.matches, statsMap);
   return {
     ...tournament,
-    teams: tournament.teams.map((t) => serializeTeam(t, statsMap.get(t.id) ?? ZERO_STATS, includeSecrets)),
+    teams: tournament.teams.map((t) =>
+      serializeTeam(t, statsMap.get(t.id) ?? ZERO_STATS, includeSecrets, ranks.get(t.id) ?? NO_RANK)
+    ),
   };
 };
 
@@ -209,8 +236,9 @@ export const removePoule = async (id: number) => {
 export const listTeams = async (tournamentId: number, includeSecrets = false) => {
   const tournament = await getTournament(tournamentId);
   const statsMap = statsForTeams(tournament.teams, tournament.matches);
+  const ranks = ranksForTeams(tournament.teams, tournament.matches, statsMap);
   const teams = await findTeamsByTournament(tournamentId);
-  return teams.map((t) => serializeTeam(t, statsMap.get(t.id) ?? ZERO_STATS, includeSecrets));
+  return teams.map((t) => serializeTeam(t, statsMap.get(t.id) ?? ZERO_STATS, includeSecrets, ranks.get(t.id) ?? NO_RANK));
 };
 
 /** Kale teamrij — intern, en de enige plek waar `token` gewoon meekomt. */
@@ -224,7 +252,8 @@ export const getTeam = async (id: number, includeSecrets = false) => {
   const team = await getTeamRow(id);
   const tournament = await getTournament(team.tournamentId);
   const statsMap = statsForTeams(tournament.teams, tournament.matches);
-  return serializeTeam(team, statsMap.get(team.id) ?? ZERO_STATS, includeSecrets);
+  const ranks = ranksForTeams(tournament.teams, tournament.matches, statsMap);
+  return serializeTeam(team, statsMap.get(team.id) ?? ZERO_STATS, includeSecrets, ranks.get(team.id) ?? NO_RANK);
 };
 
 export const MAX_MOTTO = 60;
@@ -347,10 +376,138 @@ export const recordScore = async (matchId: number, scoreA: number, scoreB: numbe
   if (match.bracketPos && scoreA === scoreB) {
     throw new HttpError(400, "Een knock-outwedstrijd kan niet gelijk eindigen");
   }
-  const scored = await scoreMatch(matchId, scoreA, scoreB);
+  // Een opslag met dezelfde score (bv. enkel de baan aangepast) laat een
+  // forfait staan; een andere score maakt er een gewone uitslag van.
+  const hadForfeit = match.forfeitTeamId ?? null;
+  if (hadForfeit !== null && match.scoreA === scoreA && match.scoreB === scoreB) return match;
+  let scored = await scoreMatch(matchId, scoreA, scoreB);
+  if (hadForfeit !== null) {
+    scored = await setMatchResult(matchId, {
+      scoreA, scoreB, winnerId: scored.winnerId, forfeitTeamId: null, forfeitAuto: false,
+    });
+  }
   await propagateKnockout(scored);
-  if (scored.phase === Phase.GROUP_STAGE) await syncKnockout(scored.tournamentId);
+  if (scored.phase === Phase.GROUP_STAGE) {
+    if (hadForfeit !== null) await applyEliminations(scored.tournamentId, hadForfeit);
+    await syncKnockout(scored.tournamentId);
+  }
   return scored;
+};
+
+// ── Forfait (reglement art. 6 en 20) ─────────────────────────────────────────
+
+export const FORFEIT_SCORE = 5;
+
+/** Twee forfaits in de poules = uit het toernooi: de resterende poulematchen
+ *  van dat team worden automatisch forfait. Zakt het terug onder twee (een
+ *  forfait ongedaan gemaakt), dan verdwijnen die automatische forfaits weer. */
+const applyEliminations = async (tournamentId: number, teamId: number) => {
+  const own = (await findMatchesByTournament(tournamentId)).filter(
+    (m) => m.phase === Phase.GROUP_STAGE && (m.teamAId === teamId || m.teamBId === teamId)
+  );
+  const manual = own.filter((m) => m.forfeitTeamId === teamId && !m.forfeitAuto).length;
+  for (const m of own) {
+    if (manual >= MAX_FORFEITS && (m.scoreA === null || m.scoreB === null)) {
+      const isA = m.teamAId === teamId;
+      await setMatchResult(m.id, {
+        scoreA: isA ? 0 : FORFEIT_SCORE,
+        scoreB: isA ? FORFEIT_SCORE : 0,
+        winnerId: isA ? m.teamBId : m.teamAId,
+        forfeitTeamId: teamId,
+        forfeitAuto: true,
+      });
+    } else if (manual < MAX_FORFEITS && m.forfeitAuto && m.forfeitTeamId === teamId) {
+      await setMatchResult(m.id, { scoreA: null, scoreB: null, winnerId: null, forfeitTeamId: null, forfeitAuto: false });
+    }
+  }
+};
+
+/** Forfait voor `teamId`: verliest 0–5. In de knock-out ligt het team eruit
+ *  (de tegenstander schuift door). */
+export const recordForfeit = async (matchId: number, teamId: number) => {
+  const match = await getMatch(matchId);
+  if (match.teamAId === null || match.teamBId === null) {
+    throw new HttpError(400, "Beide ploegen moeten gekend zijn voor een forfait.");
+  }
+  if (teamId !== match.teamAId && teamId !== match.teamBId) {
+    throw new HttpError(400, "Die ploeg speelt deze wedstrijd niet.");
+  }
+  const isA = teamId === match.teamAId;
+  const updated = await setMatchResult(matchId, {
+    scoreA: isA ? 0 : FORFEIT_SCORE,
+    scoreB: isA ? FORFEIT_SCORE : 0,
+    winnerId: isA ? match.teamBId : match.teamAId,
+    forfeitTeamId: teamId,
+    forfeitAuto: false,
+  });
+  // Een ander team had eerder forfait op deze match: dat telt niet meer.
+  const previous = match.forfeitTeamId !== null && match.forfeitTeamId !== teamId ? match.forfeitTeamId : null;
+  await propagateKnockout(updated);
+  if (updated.phase === Phase.GROUP_STAGE) {
+    await applyEliminations(updated.tournamentId, teamId);
+    if (previous !== null) await applyEliminations(updated.tournamentId, previous);
+    await syncKnockout(updated.tournamentId);
+  }
+  return getMatch(matchId);
+};
+
+/** Forfait ongedaan maken: de wedstrijd staat weer open. */
+export const clearForfeit = async (matchId: number) => {
+  const match = await getMatch(matchId);
+  if (match.forfeitTeamId === null) throw new HttpError(400, "Deze wedstrijd heeft geen forfait.");
+  if (match.forfeitAuto) {
+    throw new HttpError(400, "Dit forfait volgt uit twee eerdere forfaits. Maak een van die forfaits ongedaan.");
+  }
+  if (match.bracketPos) {
+    const flow = nextBracketSlot(match.bracketPos);
+    const all = await findMatchesByTournament(match.tournamentId);
+    const later = [flow?.winner?.[0], flow?.loser?.[0]]
+      .filter(Boolean)
+      .map((pos) => all.find((m) => m.bracketPos === pos))
+      .some((m) => m && m.scoreA !== null && m.scoreB !== null);
+    if (later) throw new HttpError(409, "De volgende ronde is al gespeeld; pas eerst die score aan.");
+  }
+  const teamId = match.forfeitTeamId;
+  const cleared = await setMatchResult(matchId, {
+    scoreA: null, scoreB: null, winnerId: null, forfeitTeamId: null, forfeitAuto: false,
+  });
+  await propagateKnockout(cleared);
+  if (cleared.phase === Phase.GROUP_STAGE) {
+    await applyEliminations(cleared.tournamentId, teamId);
+    await syncKnockout(cleared.tournamentId);
+  }
+  return cleared;
+};
+
+// ── Bal gooien bij gelijke stand (art. 9.5) ──────────────────────────────────
+
+/**
+ * `teamIds` in de volgorde waarin ze eindigden (eerste = dichtst bij het
+ * cochonnet). `clear` wist het. `kind`: "poule" voor een gelijke stand in de
+ * poule, "ranking" voor een gelijke stand tussen poules (beste derdes).
+ */
+export const setTiebreak = async (
+  tournamentId: number,
+  input: { kind?: unknown; teamIds?: unknown; clear?: unknown }
+) => {
+  const kind = input.kind === "ranking" ? "ranking" : input.kind === "poule" ? "poule" : null;
+  if (!kind) throw new HttpError(400, "kind moet 'poule' of 'ranking' zijn.");
+  const ids = Array.isArray(input.teamIds) ? input.teamIds.map(Number).filter(Number.isInteger) : [];
+  if (ids.length < 2 || new Set(ids).size !== ids.length) throw new HttpError(400, "Kies minstens twee verschillende ploegen.");
+  const tournament = await getTournament(tournamentId);
+  const own = new Set(tournament.teams.map((t) => t.id));
+  if (ids.some((id) => !own.has(id))) throw new HttpError(400, "Een ploeg hoort niet bij dit toernooi.");
+  if (kind === "poule") {
+    const poules = new Set(tournament.teams.filter((t) => ids.includes(t.id)).map((t) => t.pouleId));
+    if (poules.size !== 1) throw new HttpError(400, "Bal gooien in de poule: alle ploegen moeten in dezelfde poule zitten.");
+  }
+  await setTeamTiebreaks(
+    kind === "poule" ? "pouleTiebreak" : "rankingTiebreak",
+    ids.map((teamId, i) => ({ teamId, value: input.clear === true ? null : i + 1 }))
+  );
+  // Het knock-outschema volgt de nieuwe stand (zolang er nog niets gespeeld is).
+  await syncKnockout(tournamentId);
+  return getTournamentView(tournamentId, true);
 };
 
 // ── Automatisch knock-outschema ──────────────────────────────────────────────
@@ -575,7 +732,10 @@ export const generateKnockout = async (
         points: t.points,
         saldo: t.saldo,
         goalsFor: t.goalsFor,
+        goalsAgainst: t.goalsAgainst,
         name: t.name,
+        rankingTiebreak: t.rankingTiebreak,
+        eliminated: t.eliminated,
       }))
     ),
     tournament.teamsAdvancingPerPoule ?? 2,

@@ -93,7 +93,13 @@ export const createApp = (): Express => {
   );
 
   // Body parsing middleware
-  app.use(express.json({ limit: "100kb" }));
+  // Mails naar de ploegen mogen een bijlage (bv. het reglement als PDF)
+  // meedragen, als base64 in de JSON. Enkel daar een ruimere limiet.
+  const smallJson = express.json({ limit: "100kb" });
+  const mailJson = express.json({ limit: "8mb" });
+  app.use((req, res, next) =>
+    /\/tournaments\/\d+\/mail(\/test)?$/.test(req.path) ? mailJson(req, res, next) : smallJson(req, res, next)
+  );
   app.use(express.urlencoded({ limit: "100kb", extended: true }));
 
   // Request logging middleware

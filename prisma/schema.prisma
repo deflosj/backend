@@ -331,6 +331,11 @@ model Team {
   motto        String?
   /// Sleutel van het teamportaal. Nooit publiek teruggeven.
   token        String  @unique
+  /// Reglement art. 9.5 — bal gooien bij volledig gelijke stand in de poule.
+  /// Lager = beter, enkel vergeleken met de teams waarmee het gelijk staat.
+  pouleTiebreak   Int?
+  /// Idem, voor gelijke stand tussen poules (bv. de acht beste derdes).
+  rankingTiebreak Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -365,6 +370,11 @@ model Match {
   bracketPos   String?
   scoreA       Int?
   scoreB       Int?
+  /// Ploeg die forfait gaf (verliest 0–5). Reglement art. 20.
+  forfeitTeamId Int?
+  /// Automatisch forfait: de ploeg had al twee forfaits (art. 6) en ligt uit
+  /// het toernooi. Verdwijnt mee als een van die forfaits ongedaan wordt.
+  forfeitAuto   Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

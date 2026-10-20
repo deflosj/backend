@@ -14,6 +14,8 @@ import {
   generateKnockout,
   syncKnockout,
   applyDelay,
+  recordForfeit,
+  clearForfeit,
 } from "../services/tournament.service";
 import {
   findTournamentById,
@@ -39,6 +41,7 @@ import {
   updateMatch,
   countUnscoredGroupMatches,
   findMatchesByTournament,
+  setMatchResult,
   TeamStanding,
 } from "../repositories/tournamentRepository";
 
@@ -72,7 +75,8 @@ jest.mock("../repositories/tournamentRepository", () => ({
   generateTeamToken: jest.fn(() => "test-token"),
   // Echte Map terug, anders valt elke serialisatie stil
   computeTeamStats: jest.fn(() => new Map()),
-  sortStandings: jest.fn((teams: unknown[]) => teams),
+  setMatchResult: jest.fn(),
+  setTeamTiebreaks: jest.fn(),
   findTiebreakerByTournament: jest.fn(),
   findTournamentById: jest.fn(),
   scoreMatch: jest.fn(),
@@ -112,6 +116,7 @@ const repo = {
   updateMatch: updateMatch as jest.Mock,
   countUnscoredGroupMatches: countUnscoredGroupMatches as jest.Mock,
   findMatchesByTournament: findMatchesByTournament as jest.Mock,
+  setMatchResult: setMatchResult as jest.Mock,
 };
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -163,6 +168,8 @@ const fakeMatch = {
   bracketPos: null,
   scoreA: null,
   scoreB: null,
+  forfeitTeamId: null,
+  forfeitAuto: false,
 };
 
 const fakeTiebreaker = { id: 1, tournamentId: 1, winnerId: null, teams: [] };
@@ -185,6 +192,8 @@ const makeTeam = (id: number, overrides: Partial<Team> = {}): Team => ({
   speler4: "Jens",
   motto: null,
   token: `token-${id}`,
+  pouleTiebreak: null,
+  rankingTiebreak: null,
   createdAt: new Date("2025-01-01"),
   updatedAt: new Date("2025-01-01"),
   ...overrides,
@@ -200,6 +209,11 @@ const makeStanding = (id: number, overrides: Partial<TeamStanding> = {}): TeamSt
   goalsAgainst: 5,
   saldo: -2,
   points: 3,
+  forfeits: 0,
+  pouleRank: 0,
+  tieWith: [],
+  tieResolved: false,
+  eliminated: false,
   ...overrides,
 });
 
@@ -360,6 +374,64 @@ describe("addTeam", () => {
     const team = await addTeam(1, { name: "De Vlaamse Arend" });
     expect(team.name).toBe("De Vlaamse Arend");
     expect(repo.createTeam).toHaveBeenCalledWith(1, { name: "De Vlaamse Arend" });
+  });
+});
+
+// ── Forfait ───────────────────────────────────────────────────────────────────
+
+describe("forfait", () => {
+  const group = (id: number, a: number, b: number, extra: Record<string, unknown> = {}) => ({
+    ...fakeMatch, id, teamAId: a, teamBId: b, phase: "GROUP_STAGE", bracketPos: null, ...extra,
+  });
+
+  beforeEach(() => {
+    repo.setMatchResult.mockImplementation(async (id: number, data: object) => ({ ...group(id, 1, 2), ...data }));
+    repo.findTournamentById.mockResolvedValue({ ...fakeTournament, teams: [], matches: [] });
+  });
+
+  it("ploeg A verliest 0–5, B wint", async () => {
+    repo.findMatchById.mockResolvedValue(group(10, 1, 2));
+    repo.findMatchesByTournament.mockResolvedValue([group(10, 1, 2, { forfeitTeamId: 1, scoreA: 0, scoreB: 5 })]);
+    await recordForfeit(10, 1);
+    expect(repo.setMatchResult).toHaveBeenCalledWith(10, {
+      scoreA: 0, scoreB: 5, winnerId: 2, forfeitTeamId: 1, forfeitAuto: false,
+    });
+  });
+
+  it("weigert een ploeg die niet in de match speelt", async () => {
+    repo.findMatchById.mockResolvedValue(group(10, 1, 2));
+    await expect(recordForfeit(10, 3)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("tweede forfait: de resterende poulematchen worden automatisch forfait", async () => {
+    repo.findMatchById.mockResolvedValue(group(11, 1, 3));
+    repo.findMatchesByTournament.mockResolvedValue([
+      group(10, 1, 2, { forfeitTeamId: 1, scoreA: 0, scoreB: 5 }),
+      group(11, 1, 3, { forfeitTeamId: 1, scoreA: 0, scoreB: 5 }),
+      group(12, 4, 1),
+    ]);
+    await recordForfeit(11, 1);
+    expect(repo.setMatchResult).toHaveBeenCalledWith(12, {
+      scoreA: 5, scoreB: 0, winnerId: 4, forfeitTeamId: 1, forfeitAuto: true,
+    });
+  });
+
+  it("ongedaan maken onder twee forfaits wist de automatische", async () => {
+    repo.findMatchById.mockResolvedValue(group(11, 1, 3, { forfeitTeamId: 1, scoreA: 0, scoreB: 5 }));
+    repo.findMatchesByTournament.mockResolvedValue([
+      group(10, 1, 2, { forfeitTeamId: 1, scoreA: 0, scoreB: 5 }),
+      group(11, 1, 3),
+      group(12, 4, 1, { forfeitTeamId: 1, forfeitAuto: true, scoreA: 5, scoreB: 0 }),
+    ]);
+    await clearForfeit(11);
+    expect(repo.setMatchResult).toHaveBeenCalledWith(12, {
+      scoreA: null, scoreB: null, winnerId: null, forfeitTeamId: null, forfeitAuto: false,
+    });
+  });
+
+  it("een automatisch forfait kan je niet los ongedaan maken", async () => {
+    repo.findMatchById.mockResolvedValue(group(12, 4, 1, { forfeitTeamId: 1, forfeitAuto: true, scoreA: 5, scoreB: 0 }));
+    await expect(clearForfeit(12)).rejects.toMatchObject({ statusCode: 400 });
   });
 });
 

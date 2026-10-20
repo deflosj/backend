@@ -39,6 +39,9 @@ import {
   removeTournament,
   resolveTiebreakerWinner,
   saveTiebreaker,
+  recordForfeit,
+  clearForfeit,
+  setTiebreak,
   saveTournamentRules,
   selfRegisterTeam,
   setActiveTournament,
@@ -511,6 +514,32 @@ tournamentRouter.post("/:id/matches/:matchId/score", ...refereeOrAdmin, validate
   }
 });
 
+// ── Forfait en bal gooien ─────────────────────────────────────────────────────
+
+tournamentRouter.post("/:id/matches/:matchId/forfeit", ...refereeOrAdmin, validate({ params: tournamentMatchParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await recordForfeit(Number.parseInt(req.params.matchId, 10), Number.parseInt(req.body?.teamId, 10)));
+  } catch (e) {
+    next(e);
+  }
+});
+
+tournamentRouter.delete("/:id/matches/:matchId/forfeit", ...refereeOrAdmin, validate({ params: tournamentMatchParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await clearForfeit(Number.parseInt(req.params.matchId, 10)));
+  } catch (e) {
+    next(e);
+  }
+});
+
+tournamentRouter.put("/:id/tiebreak", ...refereeOrAdmin, validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await setTiebreak(Number.parseInt(req.params.id, 10), req.body ?? {}));
+  } catch (e) {
+    next(e);
+  }
+});
+
 // ── Tiebreaker ────────────────────────────────────────────────────────────────
 
 tournamentRouter.get("/:id/tiebreaker", validate({ params: tournamentIdParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -588,6 +617,7 @@ tournamentRouter.post("/:id/mail", ...adminOnly, validate({ params: tournamentId
       pouleId: req.body?.pouleId ? Number(req.body.pouleId) : null,
       teamIds,
       send: req.body?.send === true,
+      attachments: req.body?.attachments,
     }));
   } catch (e) {
     next(e);
@@ -602,6 +632,7 @@ tournamentRouter.post("/:id/mail/test", ...adminOnly, validate({ params: tournam
       body: req.body?.body,
       audience: req.body?.audience,
       pouleId: req.body?.pouleId ? Number(req.body.pouleId) : null,
+      attachments: req.body?.attachments,
     }, req.body?.testTo));
   } catch (e) {
     next(e);

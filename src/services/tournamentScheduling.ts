@@ -9,6 +9,7 @@
  *                in de eerste ronde.
  */
 import { Phase } from "@prisma/client";
+import { compareAcrossPoules } from "./standings";
 
 // ── Gedeelde types ────────────────────────────────────────────────────────────
 
@@ -159,11 +160,20 @@ export interface StandingInput {
   points: number;
   saldo: number;
   goalsFor: number;
+  goalsAgainst?: number;
   name: string;
+  /** Bal gooien tussen poules (lager = beter). */
+  rankingTiebreak?: number | null;
+  /** Twee forfaits: kan niet doorstoten. */
+  eliminated?: boolean;
 }
 
+/** Reglement art. 9: punten, saldo, gescoord, minste tegen, bal gooien. */
 const compareStanding = (a: StandingInput, b: StandingInput) =>
-  b.points - a.points || b.saldo - a.saldo || b.goalsFor - a.goalsFor || a.name.localeCompare(b.name);
+  compareAcrossPoules(
+    { ...a, goalsAgainst: a.goalsAgainst ?? a.goalsFor - a.saldo, forfeits: 0 },
+    { ...b, goalsAgainst: b.goalsAgainst ?? b.goalsFor - b.saldo, forfeits: 0 }
+  );
 
 /** Rangschikt de doorgaande teams 1..N: eerst alle poulewinnaars (onderling
  *  op punten, saldo, gemaakte punten), dan alle tweedes, … en tot slot de
@@ -173,6 +183,8 @@ export function rankQualifiers(
   advancingPerPoule: number,
   bestNths: number
 ): StandingInput[] {
+  // Uitgeschakelde teams tellen niet mee: wie na hen komt, schuift op.
+  standings = standings.map((s) => s.filter((t) => !t.eliminated));
   const seeds: StandingInput[] = [];
   for (let place = 0; place < advancingPerPoule; place++) {
     seeds.push(

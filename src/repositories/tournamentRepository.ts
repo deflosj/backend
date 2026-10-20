@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { PouleRankInfo, rankPoule } from "../services/standings";
 import { Match, Phase, Poule, Team, Tiebreaker, TiebreakerTeam, Tournament, TournamentStatus } from "@prisma/client";
 import prisma from "../database/prisma";
 
@@ -178,6 +179,19 @@ export const createMatch = (tournamentId: number, data: MatchData): Promise<Matc
 export const updateMatch = (id: number, data: Partial<MatchData>): Promise<Match> =>
   prisma.match.update({ where: { id }, data });
 
+/** Score, winnaar en forfait in één keer (forfait zetten of wissen). */
+export const setMatchResult = (
+  id: number,
+  data: { scoreA: number | null; scoreB: number | null; winnerId: number | null; forfeitTeamId: number | null; forfeitAuto: boolean }
+): Promise<Match> => prisma.match.update({ where: { id }, data });
+
+/** Bal gooien: zet de volgorde (1, 2, …) of wist ze (null). */
+export const setTeamTiebreaks = (
+  field: "pouleTiebreak" | "rankingTiebreak",
+  entries: { teamId: number; value: number | null }[]
+) =>
+  prisma.$transaction(entries.map((e) => prisma.team.update({ where: { id: e.teamId }, data: { [field]: e.value } })));
+
 export const deleteMatch = (id: number): Promise<Match> =>
   prisma.match.delete({ where: { id } });
 
@@ -281,13 +295,15 @@ export interface TeamStats {
   goalsAgainst: number;
   saldo: number;
   points: number;
+  /** Forfaits in de poulefase (art. 6: twee = uit het toernooi). */
+  forfeits: number;
 }
 
-export type TeamStanding = Team & TeamStats;
+export type TeamStanding = Team & TeamStats & PouleRankInfo;
 
 const zeroStats = (): TeamStats => ({
   played: 0, won: 0, drawn: 0, lost: 0,
-  goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0,
+  goalsFor: 0, goalsAgainst: 0, saldo: 0, points: 0, forfeits: 0,
 });
 
 function applyMatchToStats(map: Map<number, TeamStats>, teamId: number, myScore: number, oppScore: number) {
@@ -306,7 +322,7 @@ function applyMatchToStats(map: Map<number, TeamStats>, teamId: number, myScore:
  *  Nergens opgeslagen — één bron van waarheid: de scores. */
 export const computeTeamStats = (
   teamIds: number[],
-  matches: Pick<Match, "teamAId" | "teamBId" | "scoreA" | "scoreB">[]
+  matches: (Pick<Match, "teamAId" | "teamBId" | "scoreA" | "scoreB"> & { forfeitTeamId?: number | null })[]
 ): Map<number, TeamStats> => {
   const statsMap = new Map<number, TeamStats>(teamIds.map((id) => [id, zeroStats()]));
 
@@ -315,28 +331,24 @@ export const computeTeamStats = (
     if (scoreA === null || scoreB === null) continue;
     if (teamAId) applyMatchToStats(statsMap, teamAId, scoreA, scoreB);
     if (teamBId) applyMatchToStats(statsMap, teamBId, scoreB, scoreA);
+    if (m.forfeitTeamId) {
+      const f = statsMap.get(m.forfeitTeamId);
+      if (f) f.forfeits++;
+    }
   }
 
   return statsMap;
 };
 
-/** Klassieke volgorde: punten, dan saldo, dan gemaakte punten, dan naam. */
-export const sortStandings = <T extends TeamStats & { name: string }>(teams: T[]): T[] =>
-  [...teams].sort((a, b) =>
-    b.points - a.points ||
-    b.saldo - a.saldo ||
-    b.goalsFor - a.goalsFor ||
-    a.name.localeCompare(b.name)
-  );
-
+/** Stand van één poule volgens het reglement (zie services/standings.ts). */
 export const findTeamsByPoule = async (pouleId: number): Promise<TeamStanding[]> => {
   const [teams, matches] = await Promise.all([
     prisma.team.findMany({ where: { pouleId } }),
-    prisma.match.findMany({ where: { pouleId, scoreA: { not: null }, scoreB: { not: null } } }),
+    prisma.match.findMany({ where: { pouleId, phase: "GROUP_STAGE", scoreA: { not: null }, scoreB: { not: null } } }),
   ]);
 
   const statsMap = computeTeamStats(teams.map((t) => t.id), matches);
-  return sortStandings(teams.map((t) => ({ ...t, ...(statsMap.get(t.id) ?? zeroStats()) })));
+  return rankPoule(teams.map((t) => ({ ...t, ...(statsMap.get(t.id) ?? zeroStats()) })), matches);
 };
 
 export const countUnscoredGroupMatches = (tournamentId: number): Promise<number> =>
