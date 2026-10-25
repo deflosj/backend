@@ -58,6 +58,7 @@ import {
   redeemTournamentCode,
   removeTournamentCode,
 } from "../services/tournamentInviteCode.service";
+import { atBrusselsTime, parseDateInput } from "../utils/time";
 
 const tournamentRouter = Router();
 const adminOnly = [requireAuth, requireAccess("manageTournament")];
@@ -195,8 +196,8 @@ tournamentRouter.post("/", ...adminOnly, async (req: Request, res: Response, nex
 const parseDeadline = (value: unknown): Date | null | undefined => {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
-  const d = new Date(String(value));
-  if (Number.isNaN(d.getTime())) throw new HttpError(400, "teamEditDeadline is not a valid date");
+  const d = parseDateInput(value);
+  if (!d) throw new HttpError(400, "teamEditDeadline is not a valid date");
   return d;
 };
 
@@ -437,7 +438,7 @@ tournamentRouter.post("/:id/matches", ...adminOnly, validate({ params: tournamen
         pouleId: req.body.pouleId ?? null,
         teamAId: req.body.teamAId ?? null,
         teamBId: req.body.teamBId ?? null,
-        scheduledAt: req.body.time ? new Date(req.body.time) : undefined,
+        scheduledAt: req.body.time ? parseDateInput(req.body.time) ?? undefined : undefined,
         track: req.body.track ?? null,
         phase: req.body.phase ?? Phase.GROUP_STAGE,
         bracketPos: req.body.bracketPos ?? null,
@@ -459,13 +460,11 @@ const parseMatchTime = (value: unknown, current: Date | null): Date | undefined 
 
   const hhmm = /^(\d{1,2}):(\d{2})$/.exec(raw);
   if (hhmm) {
-    const base = current ? new Date(current) : new Date();
-    base.setHours(Number.parseInt(hhmm[1], 10), Number.parseInt(hhmm[2], 10), 0, 0);
-    return base;
+    return atBrusselsTime(current ?? new Date(), Number.parseInt(hhmm[1], 10), Number.parseInt(hhmm[2], 10));
   }
 
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) throw new HttpError(400, "Tijd is geen geldig tijdstip (verwacht bv. 15:00).");
+  const parsed = parseDateInput(raw);
+  if (!parsed) throw new HttpError(400, "Tijd is geen geldig tijdstip (verwacht bv. 15:00).");
   return parsed;
 };
 

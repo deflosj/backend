@@ -16,6 +16,7 @@ import {
   updateNewsPost,
   updateSponsor,
 } from "../repositories/contentRepository";
+import { parseDateInput } from "../utils/time";
 
 export interface NewsPostInput {
   authorId: number;
@@ -117,7 +118,7 @@ export const getEvent = async (id: number) => getEventByIdOrThrow(id);
 
 export const createNewEvent = async (input: EventInput) => {
   const title = ensureValue(input.title, "Title is required");
-  const startsAt = new Date(input.startsAt);
+  const startsAt = (parseDateInput(input.startsAt) ?? new Date(Number.NaN));
 
   if (Number.isNaN(startsAt.getTime())) {
     throw new HttpError(400, "A valid startsAt date is required");
@@ -129,14 +130,14 @@ export const createNewEvent = async (input: EventInput) => {
     description: input.description ?? null,
     location: input.location ?? null,
     startsAt,
-    endsAt: input.endsAt ? new Date(input.endsAt) : null,
+    endsAt: input.endsAt ? (parseDateInput(input.endsAt) ?? new Date(Number.NaN)) : null,
     isPublished: input.isPublished ?? false,
   });
 };
 
 export const editEvent = async (id: number, input: Partial<EventInput>) => {
   const existing = await getEventByIdOrThrow(id);
-  const startsAt = input.startsAt ? new Date(input.startsAt) : existing.startsAt;
+  const startsAt = input.startsAt ? (parseDateInput(input.startsAt) ?? new Date(Number.NaN)) : existing.startsAt;
 
   if (input.startsAt && Number.isNaN(startsAt.getTime())) {
     throw new HttpError(400, "A valid startsAt date is required");
@@ -148,7 +149,7 @@ export const editEvent = async (id: number, input: Partial<EventInput>) => {
     description: input.description ?? existing.description,
     location: input.location ?? existing.location,
     startsAt,
-    endsAt: input.endsAt ? new Date(input.endsAt) : input.endsAt === null ? null : existing.endsAt,
+    endsAt: input.endsAt ? (parseDateInput(input.endsAt) ?? new Date(Number.NaN)) : input.endsAt === null ? null : existing.endsAt,
     isPublished: input.isPublished ?? existing.isPublished,
   });
 };

@@ -12,6 +12,7 @@ import {
   updateTeam,
 } from "../repositories/tournamentRepository";
 import { MAX_MOTTO, getTeamRow, serializeTeam } from "./tournament.service";
+import { fmtDateTime } from "../utils/time";
 
 const MAX_TEAM_NAME = 60;
 const MAX_PLAYER_NAME = 60;
@@ -147,7 +148,7 @@ export const sendPortalLink = async (teamId: number, email?: string) => {
   const tournament = await findTournamentById(team.tournamentId);
   const link = portalLinkFor(team.token);
   const deadline = tournament?.teamEditDeadline
-    ? `\n\nJullie kunnen dit aanpassen tot ${tournament.teamEditDeadline.toLocaleString("nl-BE")}.`
+    ? `\n\nJullie kunnen dit aanpassen tot ${fmtDateTime(tournament.teamEditDeadline, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.`
     : "";
 
   await sendMail({
