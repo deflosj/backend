@@ -46,6 +46,7 @@ import {
   updateTournamentRules,
   countUnscoredGroupMatches,
   setMatchResult,
+  setMatchSkipped,
   setTeamTiebreaks,
 } from "../repositories/tournamentRepository";
 import {
@@ -386,12 +387,25 @@ export const recordScore = async (matchId: number, scoreA: number, scoreB: numbe
       scoreA, scoreB, winnerId: scored.winnerId, forfeitTeamId: null, forfeitAuto: false,
     });
   }
+  // Een overgeslagen match die alsnog een score krijgt, is niet meer "open".
+  if (scored.skipped) scored = await setMatchSkipped(matchId, false);
   await propagateKnockout(scored);
   if (scored.phase === Phase.GROUP_STAGE) {
     if (hadForfeit !== null) await applyEliminations(scored.tournamentId, hadForfeit);
     await syncKnockout(scored.tournamentId);
   }
   return scored;
+};
+
+/** Eventdag: scores worden per baan om de beurt ingegeven. Een match die
+ *  (nog) geen score heeft, kan de scheidsrechter bewust overslaan; ze blijft
+ *  dan apart staan als "nog in te geven". */
+export const skipMatch = async (matchId: number, skipped: boolean) => {
+  const match = await getMatch(matchId);
+  if (skipped && match.scoreA !== null && match.scoreB !== null) {
+    throw new HttpError(400, "Deze wedstrijd heeft al een score.");
+  }
+  return setMatchSkipped(matchId, skipped);
 };
 
 // ── Forfait (reglement art. 6 en 20) ─────────────────────────────────────────

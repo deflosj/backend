@@ -185,6 +185,10 @@ export const setMatchResult = (
   data: { scoreA: number | null; scoreB: number | null; winnerId: number | null; forfeitTeamId: number | null; forfeitAuto: boolean }
 ): Promise<Match> => prisma.match.update({ where: { id }, data });
 
+/** Eventdag: match overslaan bij het ingeven, of dat ongedaan maken. */
+export const setMatchSkipped = (id: number, skipped: boolean): Promise<Match> =>
+  prisma.match.update({ where: { id }, data: { skipped } });
+
 /** Bal gooien: zet de volgorde (1, 2, …) of wist ze (null). */
 export const setTeamTiebreaks = (
   field: "pouleTiebreak" | "rankingTiebreak",

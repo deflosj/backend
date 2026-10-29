@@ -375,6 +375,9 @@ model Match {
   /// Automatisch forfait: de ploeg had al twee forfaits (art. 6) en ligt uit
   /// het toernooi. Verdwijnt mee als een van die forfaits ongedaan wordt.
   forfeitAuto   Boolean  @default(false)
+  /// Scheidsrechter sloeg deze match bewust over bij het ingeven (eventdag).
+  /// De baan schuift door; de match blijft "nog in te geven" tot er een score is.
+  skipped       Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -118,6 +118,7 @@ const MATCH = {
   scoreB: null,
   forfeitTeamId: null,
   forfeitAuto: false,
+  skipped: false,
   createdAt: new Date("2025-01-01"),
   updatedAt: new Date("2025-01-01"),
 };

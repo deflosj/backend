@@ -41,6 +41,7 @@ import {
   saveTiebreaker,
   recordForfeit,
   clearForfeit,
+  skipMatch,
   setTiebreak,
   saveTournamentRules,
   selfRegisterTeam,
@@ -508,6 +509,14 @@ tournamentRouter.delete("/:id/matches/:matchId", ...adminOnly, validate({ params
 tournamentRouter.post("/:id/matches/:matchId/score", ...refereeOrAdmin, validate({ params: tournamentMatchParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     res.json(await recordScore(Number.parseInt(req.params.matchId, 10), Number.parseInt(req.body.scoreA, 10), Number.parseInt(req.body.scoreB, 10)));
+  } catch (e) {
+    next(e);
+  }
+});
+
+tournamentRouter.post("/:id/matches/:matchId/skip", ...refereeOrAdmin, validate({ params: tournamentMatchParamsSchema }), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    res.json(await skipMatch(Number.parseInt(req.params.matchId, 10), req.body?.skipped !== false));
   } catch (e) {
     next(e);
   }

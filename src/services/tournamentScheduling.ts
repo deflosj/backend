@@ -293,6 +293,32 @@ export interface KnockoutScheduleParams {
   withConsolation: boolean;
 }
 
+/** Banen voor de knock-out. De terreinen liggen als 1 2 3 met in het
+ *  verlengde 4 5 6: baan 2 en 5 zijn het best zichtbaar. Zijn niet alle banen
+ *  nodig, dan kiezen we ze bewust in plaats van 1, 2, 3, ...:
+ *  1 match → 2 (finale), 2 → 2 en 5 (finale + kleine finale, halve finales),
+ *  3 → 1, 3, 5, 4 → 1, 3, 4, 6 (kwartfinales, meer ruimte ertussen),
+ *  5 → 1, 2, 3, 4, 6. Bij een ander aantal banen: gewoon van 1 af.
+ *  Geeft per match (in volgorde) een baan; meer matchen dan banen = meerdere
+ *  tijdsloten, elk slot opnieuw verdeeld. */
+const SIX_TRACK_LAYOUT: Record<number, number[]> = {
+  1: [2],
+  2: [2, 5],
+  3: [1, 3, 5],
+  4: [1, 3, 4, 6],
+  5: [1, 2, 3, 4, 6],
+};
+
+export function knockoutTracks(count: number, trackCount: number): number[] {
+  const out: number[] = [];
+  for (let start = 0; start < count; start += trackCount) {
+    const inSlot = Math.min(trackCount, count - start);
+    const layout = trackCount === 6 ? SIX_TRACK_LAYOUT[inSlot] : undefined;
+    for (let i = 0; i < inSlot; i++) out.push(layout ? layout[i] : i + 1);
+  }
+  return out;
+}
+
 /** Rondes die de langere "finales"-slot krijgen. */
 const LATE_PHASES = new Set<Phase>([Phase.QUARTER_FINAL, Phase.SEMI_FINAL, Phase.CONSOLATION_FINAL, Phase.FINAL]);
 
@@ -341,15 +367,19 @@ export function buildKnockout(seeds: StandingInput[], params: KnockoutSchedulePa
   const planned: PlannedMatch[] = [];
   let roundStart = startTime;
   for (const round of rounds) {
-    const playable = round.filter((m) => !m.skip);
+    // De finale krijgt de eerste (beste) baan, de kleine finale de tweede.
+    const playable = round
+      .filter((m) => !m.skip)
+      .sort((a, b) => Number(b.phase === Phase.FINAL) - Number(a.phase === Phase.FINAL));
     const slot = round.some((m) => LATE_PHASES.has(m.phase)) ? params.finalsSlotMinutes ?? slotMinutes : slotMinutes;
+    const tracks = knockoutTracks(playable.length, trackCount);
     playable.forEach((m, i) => {
       planned.push({
         pouleId: null,
         teamAId: m.a,
         teamBId: m.b,
         scheduledAt: addMinutes(roundStart, Math.floor(i / trackCount) * slot),
-        track: (i % trackCount) + 1,
+        track: tracks[i],
         phase: m.phase,
         bracketPos: m.pos,
       });
